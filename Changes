@@ -1,0 +1,6 @@
+Revision history for Perl extension Lemonldap::NG::Handler.
+
+0.01  Thu Jun 23 17:36:59 2005
+	- original version; created by h2xs 1.23 with options
+		-AXn Lemonldap::NG::Handler
+
