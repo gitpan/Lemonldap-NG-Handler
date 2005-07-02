@@ -1,22 +1,25 @@
 package Lemonldap::NG::Handler::Vhost;
 
-use Lemonldap::NG::Handler qw(:locationRules);
+use Lemonldap::NG::Handler qw(:locationRules :headers);
 use strict;
+use MIME::Base64;
 
-our $VERSION = '0;01';
+our $VERSION = '0.02';
 
 sub locationRulesInit {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     foreach my $vhost ( keys %{ $args->{locationRules} } ) {
         $locationCount->{$vhost} = 0;
         foreach ( keys %{ $args->{locationRules}->{$vhost} } ) {
             if ( $_ eq 'default' ) {
                 $defaultCondition->{$vhost} =
-                  $class->conditionSub( $args->{locationRules}->{$vhost}->{$_} );
+                  $class->conditionSub(
+                    $args->{locationRules}->{$vhost}->{$_} );
             }
             else {
                 $locationCondition->{$vhost}->[ $locationCount->{$vhost} ] =
-                  $class->conditionSub( $args->{locationRules}->{$vhost}->{$_} );
+                  $class->conditionSub(
+                    $args->{locationRules}->{$vhost}->{$_} );
                 $locationRegexp->{$vhost}->[ $locationCount->{$vhost} ] =
                   qr/$_/;
                 $locationCount->{$vhost}++;
@@ -29,17 +32,55 @@ sub locationRulesInit {
     }
 }
 
+sub forgeHeadersInit {
+    my ( $class, $args ) = @_;
+    Apache->server->log->debug( __PACKAGE__ . ": forgeHeadersInit" );
+
+    # Creation of the subroutine who will generate headers
+    foreach my $vhost ( keys %{ $args->{exportedHeaders} } ) {
+        my %tmp = %{ $args->{exportedHeaders}->{$vhost} };
+        foreach ( keys %tmp ) {
+            $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
+            $tmp{$_} =~
+              s/\$datas->\{ip\}/\$apacheRequest->connection->remote_ip/g;
+        }
+
+        my $sub;
+        foreach ( keys %tmp ) {
+            $sub .= "\$apacheRequest->header_in('$_' => " . $tmp{$_} . ");";
+        }
+        $sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
+        eval "$sub";
+        Apache->server->log->error(
+            __PACKAGE__ . ": Unable to forge headers: $@ $sub" )
+          if ($@);
+    }
+}
+
+sub sendHeaders {
+    my $class = shift;
+    my $vhost;
+    $vhost = $apacheRequest->hostname;
+    if ( defined( $forgeHeaders->{$vhost} ) ) {
+        &{ $forgeHeaders->{$vhost} };
+    }
+    else {
+        $apacheRequest->header_in( 'Auth-User' => '$uid' );
+    }
+}
+
 sub grant {
-    my ($class,$uri) = shift;
+    my ( $class, $uri ) = shift;
     my $vhost = $apacheRequest->hostname;
     for ( my $i = 0 ; $i < $locationCount->{$vhost} ; $i++ ) {
-        return &{ $locationCondition->{$vhost}->[$i] }($datas)
-          if ( $uri =~ $locationRegexp->{$vhost}->[$i] );
+        if ( $uri =~ $locationRegexp->{$vhost}->[$i] ) {
+            return &{ $locationCondition->{$vhost}->[$i] }($datas);
+        }
     }
-    unless($defaultCondition->{$vhost}) {
-        Apache->server->log->warn("User rejected because VirtualHost $vhost has no configuration");
+    unless ( $defaultCondition->{$vhost} ) {
+        Apache->server->log->warn(
+            "User rejected because VirtualHost $vhost has no configuration");
     }
-    Apache->server->log->info("Grant : ".&{ $defaultCondition->{$vhost} });
     return &{ $defaultCondition->{$vhost} };
 }
 
@@ -89,16 +130,27 @@ Other example, using L<Lemonldap::NG::Handler::SharedConf>
 
 Change configuration
 
-  __PACKAGE__->setConf ( { locationRules => {
-               'vhost1.dc.com' => {
+  __PACKAGE__->setConf ( {
+               locationRules => {
+                 'vhost1.dc.com' => {
 	           'default' => '$ou =~ /brh/'
-	       },
-	       'vhost2.dc.com' => {
+                 },
+	         'vhost2.dc.com' => {
 	           '^/pj/.*$'       => q($qualif="opj"),
 		   '^/rh/.*$'       => q($ou=~/brh/),
 		   '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
                    default          => 'accept',
+	         },
 	       },
+	       exportedHeaders => {
+	         'vhost1.dc.com' => {
+	          'Authorization'=>'"Basic ".MIME::Base64::encode_base64($uid)',
+		  'User-Auth'    => '$uid',
+		 },
+		 'vhost2.dc.com' => {
+		   'User-Auth'   => '$uid',
+		 },
+               }
 	       # Put here others Lemonldap::NG::Handler::SharedConf options
 	     }
 	   );

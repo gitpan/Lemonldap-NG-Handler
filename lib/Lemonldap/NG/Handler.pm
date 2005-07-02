@@ -9,6 +9,8 @@ use Apache::Constants qw(:common :response);
 use MIME::Base64;
 use Exporter 'import';
 
+our $VERSION = '0.02';
+
 our %EXPORT_TAGS = (
     localStorage => [
         qw(
@@ -17,14 +19,14 @@ our %EXPORT_TAGS = (
     ],
     globalStorage => [
         qw(
-	  $globalStorage $globalStorageOptions
-	  )
+          $globalStorage $globalStorageOptions
+          )
     ],
     locationRules => [
         qw(
-	  $locationCondition $defaultCondition $locationCount
-	  $locationRegexp $apacheRequest $datas
-	  )
+          $locationCondition $defaultCondition $locationCount
+          $locationRegexp $apacheRequest $datas
+          )
     ],
     import => [
         qw(
@@ -33,25 +35,25 @@ our %EXPORT_TAGS = (
     ],
     headers => [
         qw(
-	  $forgeHeaders
-	  )
+          $forgeHeaders
+          )
     ],
     traces => [
         qw(
-	  $whatToTrace
-	  )
+          $whatToTrace
+          )
     ],
 );
 
-our @EXPORT_OK = ();;
-push(@EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach(qw(
+our @EXPORT_OK = ();
+push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach (
+    qw(
     localStorage globalStorage locationRules import headers traces
-    ));
+    )
+);
 $EXPORT_TAGS{all} = \@EXPORT_OK;
 
 our @EXPORT = ();
-
-our $VERSION = '0.01';
 
 # Shared variables
 our (
@@ -70,27 +72,29 @@ sub init {
 }
 
 sub localInit {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     Apache->server->log->debug("Lemonldap::NG::Handler: localInit");
     $localStorage = $args->{localStorage};
     $localStorageOptions = $args->{localStorageOptions} if ($localStorage);
     $localStorageOptions->{namespace} ||= "lemonldap" if ($localStorage);
     $localStorageOptions->{default_expires_in} ||= 600 if ($localStorage);
     eval "use $localStorage;" if ($localStorage);
-    # This condition is here to make 'make test' work
-    if ( $ENV{MOD_PERL} ) {
-        # We don't initialise local storage in the "init" subroutine because it can
-        # be used at the starting of Apache and so with the "root" privileges. Local
-        # Storage is also initialized just after Apache's fork and privilege lost.
-	my $tmp = sub{Apache->server->log->info("Coucou");return $class->initLocalStorage;};
-        Apache->push_handlers( PerlChildInitHandler => $tmp );
-    
-        # Local storage is cleaned after giving the content of the page to increase
-        # performances.
-	$tmp = sub{return $class->cleanLocalStorage};
-        Apache->push_handlers( PerlCleanupHandler => $tmp );
-        Apache->server->log->debug("H: $class->initLocalStorage & $class->cleanLocalStorage pushed");
-    }
+
+    # We don't initialise local storage in the "init" subroutine because it can
+    # be used at the starting of Apache and so with the "root" privileges. Local
+    # Storage is also initialized just after Apache's fork and privilege lost.
+    my $tmp = sub {
+        Apache->server->log->info("Coucou");
+        return $class->initLocalStorage;
+    };
+    Apache->push_handlers( PerlChildInitHandler => $tmp );
+
+    # Local storage is cleaned after giving the content of the page to increase
+    # performances.
+    $tmp = sub { return $class->cleanLocalStorage };
+    Apache->push_handlers( PerlCleanupHandler => $tmp );
+    Apache->server->log->debug(
+        "H: $class->initLocalStorage & $class->cleanLocalStorage pushed");
 }
 
 sub globalInit {
@@ -104,14 +108,15 @@ sub globalInit {
 }
 
 sub locationRulesInit {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     Apache->server->log->debug("Lemonldap::NG::Handler: locationRulesInit");
     $locationCount = 0;
 
     # Pre compilation : both regexp and conditions
     foreach ( keys %{ $args->{locationRules} } ) {
         if ( $_ eq 'default' ) {
-            $defaultCondition = $class->conditionSub( $args->{locationRules}->{$_} );
+            $defaultCondition =
+              $class->conditionSub( $args->{locationRules}->{$_} );
         }
         else {
             $locationCondition->[$locationCount] =
@@ -122,38 +127,41 @@ sub locationRulesInit {
     }
 
     # Default police
-    $defaultCondition = $class->conditionSub('accept') unless ($defaultCondition);
+    $defaultCondition = $class->conditionSub('accept')
+      unless ($defaultCondition);
 }
 
 sub defaultValuesInit {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     Apache->server->log->debug("Lemonldap::NG::Handler: defaultValuesInit");
+
     # Other values
     $cookieName  = $args->{cookieName}  || 'lemon';
     $whatToTrace = $args->{whatToTrace} || '$uid';
     $whatToTrace =~ s/\$//g;
-    $https         = $args->{https};
-    $https         = 1 unless defined($https);
+    $https = $args->{https};
+    $https = 1 unless defined($https);
 }
 
 sub portalInit {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     Apache->server->log->debug("Lemonldap::NG::Handler: portalInit");
-    $portal        = $args->{portal} or die("portal parameter required");
+    $portal = $args->{portal} or die("portal parameter required");
 }
 
 sub globalStorageInit {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     Apache->server->log->debug("Lemonldap::NG::Handler: globalStorageInit");
     $globalStorage = $args->{globalStorage} or die "globalStorage required";
     eval "use $globalStorage;";
-    die($@) if($@);
+    die($@) if ($@);
     $globalStorageOptions = $args->{globalStorageOptions};
 }
 
 sub forgeHeadersInit {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     Apache->server->log->debug("Lemonldap::NG::Handler: forgeHeadersInit");
+
     # Creation of the subroutine who will generate headers
     my %tmp;
     if ( $args->{exportedHeaders} ) {
@@ -173,11 +181,13 @@ sub forgeHeadersInit {
     }
     $sub = "\$forgeHeaders = sub {$sub};";
     eval "$sub";
-    Apache->server->log->error(__PACKAGE__.": Unable to forge headers: $@ $sub") if($@);
+    Apache->server->log->error(
+        __PACKAGE__ . ": Unable to forge headers: $@ $sub" )
+      if ($@);
 }
 
 sub conditionSub {
-    my ($class,$cond) = @_;
+    my ( $class, $cond ) = @_;
     return sub { 1 }
       if ( $cond =~ /^accept$/i );
     return sub { 0 }
@@ -188,7 +198,7 @@ sub conditionSub {
 }
 
 sub grant {
-    my ($class,$uri) = @_;
+    my ( $class, $uri ) = @_;
     for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
         return &{ $locationCondition->[$i] }($datas)
           if ( $uri =~ $locationRegexp->[$i] );
@@ -197,6 +207,7 @@ sub grant {
 }
 
 sub forbidden {
+
     # We use Apache::Log here
     $apacheRequest->log->notice( "The user "
           . $datas->{$whatToTrace}
@@ -212,7 +223,7 @@ sub hideCookie {
 }
 
 sub goPortal() {
-    my($class,$url) = @_;
+    my ( $class, $url ) = @_;
     my $urlc_init =
       encode_base64( "http"
           . ( $https ? "s" : "" ) . "://"
@@ -229,16 +240,20 @@ sub goPortal() {
 # MAIN SUBROUTINE called by Apache (using PerlInitHandler option)
 sub handler ($$) {
     my $class;
-    ($class,$apacheRequest) = @_;
+    ( $class, $apacheRequest ) = @_;
 
-    my $uri = $apacheRequest->uri
+    my $uri =
+      $apacheRequest->uri
       . ( $apacheRequest->args ? "?" . $apacheRequest->args : "" );
 
     # AUTHENTICATION
     # I - recover the cookie
     my $id;
-    unless ( ($id) = ( $apacheRequest->header_in('Cookie') =~ /$cookieName=([^; ]+);?/o ) ) {
-        Apache->server->log->info("No cookie found".$apacheRequest->header_in('Cookie'));
+    unless ( ($id) =
+        ( $apacheRequest->header_in('Cookie') =~ /$cookieName=([^; ]+);?/o ) )
+    {
+        Apache->server->log->info(
+            "No cookie found" . $apacheRequest->header_in('Cookie') );
         return $class->goPortal($uri);
     }
 
@@ -256,7 +271,8 @@ sub handler ($$) {
             if ($@) {
 
                 # The cookie isn't yet available
-		Apache->server->log->info("The cookie $id isn't yet available: $@");
+                Apache->server->log->info(
+                    "The cookie $id isn't yet available: $@");
                 return $class->goPortal($uri);
             }
             $datas->{$_} = $h{$_} foreach ( keys %h );
@@ -271,13 +287,16 @@ sub handler ($$) {
 
     # AUTHORIZATION
     return $class->forbidden($uri) unless ( $class->grant($uri) );
+    Apache->server->log->debug( "User "
+          . $datas->{$whatToTrace}
+          . " was authorizated to access to $uri" );
 
     # ACCOUNTING
     # 1 - Inform Apache
     $apacheRequest->connection->user( $datas->{$whatToTrace} );
 
     # 2 - Inform remote application
-    &$forgeHeaders;
+    $class->sendHeaders;
 
     # SECURITY
     # Hide Lemonldap cookie
@@ -285,20 +304,25 @@ sub handler ($$) {
     OK;
 }
 
+sub sendHeaders {
+    &$forgeHeaders;
+}
+
 sub initLocalStorage {
-    if ($localStorage and not $refLocalStorage) {
+    if ( $localStorage and not $refLocalStorage ) {
         eval '$refLocalStorage = new '
-          . $localStorage . '($localStorageOptions);';
+          . $localStorage
+          . '($localStorageOptions);';
     }
-    Apache->server->log->warn("Local cache initialization failed: $@") unless(defined $refLocalStorage);
+    Apache->server->log->warn("Local cache initialization failed: $@")
+      unless ( defined $refLocalStorage );
     return DECLINED;
 }
 
 sub cleanLocalStorage {
-    $refLocalStorage->purge() if($refLocalStorage);
+    $refLocalStorage->purge() if ($refLocalStorage);
     return DECLINED;
 }
-
 
 1;
 __END__
@@ -361,7 +385,7 @@ More complete example
 	   portal               => 'https://portal/',
 	   whatToTrace          => '$uid',
 	   exportedHeaders      => {
-	       'User-Auth'      => '$uid',
+	       'Auth-User'      => '$uid',
 	       'Unit'           => '$ou',
 	   https                => 1,
 	 }

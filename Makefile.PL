@@ -10,6 +10,8 @@ WriteMakefile(
 		'Apache::Constants' => 0,
 		'Apache::Session'   => 0,
 		'LWP::UserAgent'    => 0,
+		'Cache::Cache'      => 0,
+		'MIME::Base64'      => 0,
 		}, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Lemonldap/NG/Handler.pm', # retrieve abstract from module

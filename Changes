@@ -4,3 +4,7 @@ Revision history for Perl extension Lemonldap::NG::Handler.
 	- original version; created by h2xs 1.23 with options
 		-AXn Lemonldap::NG::Handler
 
+0.02  Sat Jul 2 10:35:00 2005
+	- bug corrections
+	- Vhost.pm modification: add header personalization per virtual host
+

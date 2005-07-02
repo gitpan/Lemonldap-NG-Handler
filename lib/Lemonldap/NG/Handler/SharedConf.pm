@@ -11,7 +11,7 @@ use Apache::Log;
 
 our @ISA = qw(Lemonldap::NG::Handler);
 
-our $VERSION    = '0.01';
+our $VERSION    = '0.02';
 our $numConf    = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -30,8 +30,9 @@ sub localInit($$) {
     my $class = shift;
     $reloadTime = $_[0]->{reloadTime} || 600;
     if ( $ENV{MOD_PERL} ) {
+
         # Update configuration for each new Apache's process
-	my $tmp = sub{return $class->reload};
+        my $tmp = sub { return $class->reload };
         Apache->push_handlers( PerlChildInitHandler => $tmp );
     }
     $class->SUPER::localInit(@_);
@@ -39,7 +40,7 @@ sub localInit($$) {
 }
 
 sub setConf {
-    my ($class,$args) = @_;
+    my ( $class, $args ) = @_;
     $numConf++;
     $args->{_n_conf} = $numConf;
     $refLocalStorage->set( "conf", $args, $EXPIRES_NEVER );
@@ -47,20 +48,22 @@ sub setConf {
 }
 
 sub reload ($$) {
-    my($class) = shift;
-    Apache->server->log->debug(__PACKAGE__.": child (re)load configuration");
+    my ($class) = shift;
+    Apache->server->log->debug(
+        __PACKAGE__ . ": child (re)load configuration" );
     my $args;
-    return 0 unless ($refLocalStorage and $args = $refLocalStorage->get("conf"));
+    return 0
+      unless ( $refLocalStorage and $args = $refLocalStorage->get("conf") );
     $class->setconf($args) if $args->{_n_conf} != $numConf;
     $lastReload = time();
     1;
 }
 
 sub handler($$) {
-    my($class) = shift;
+    my ($class) = shift;
     if ( time() - $lastReload > $reloadTime ) {
-        unless ($class->reload) {
-            $_[0]->log_error(__PACKAGE__.": No configuration found");
+        unless ( $class->reload ) {
+            $_[0]->log_error( __PACKAGE__ . ": No configuration found" );
             return SERVER_ERROR;
         }
     }

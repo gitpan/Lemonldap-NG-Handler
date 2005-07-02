@@ -7,7 +7,7 @@ use Apache;
 use Apache::Constants;
 use LWP::UserAgent;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 # Shared variables
 our $r;
@@ -15,19 +15,28 @@ our $base;
 our $headers_set;
 our $UA = new LWP::UserAgent;
 
+# IMPORTANT: LWP does not have to execute any redirection itself. This has to
+# be done by the client itself, else cookies and other information may
+# disappear.
+$UA->requests_redirectable( [] );
+
 sub handler {
     $r = shift;
     my $url = $r->uri;
     $url .= "?" . $r->args if ( $r->args );
-    return DECLINED unless($base = $r->dir_config('LmProxyPass'));
+    return DECLINED unless ( $base = $r->dir_config('LmProxyPass') );
     my $request = new HTTP::Request( $r->method, $base . $url );
+
     # Scan Apache request headers to generate LWP request headers
     $r->headers_in->do(
         sub {
             $_[1] =~ s/lemon=[^;]*;?// if ( $_[0] =~ /Cookie/i );
             return 1 if ( $_[1] =~ /^$/ );
             $request->header(@_) unless ( $_[0] =~ /^(Host|Referer)$/i );
-            #$r->warn( "Header in:" . $_[0] . ": " . $_[1] );
+            $r->server->log->debug( __PACKAGE__
+                  . ": header pushed to the server: "
+                  . $_[0] . ": "
+                  . $_[1] );
             1;
         }
     );
@@ -44,7 +53,7 @@ sub handler {
     $headers_set = 0;
     my $response = $UA->request( $request, \&cb_content );
     if ( $response->code != 200 ) {
-        headers($response);
+        headers($response) unless ($headers_set);
         $r->print( $response->content );
     }
     return OK;
@@ -54,6 +63,7 @@ sub cb_content {
     my $chunk = shift;
     unless ($headers_set) {
         headers(shift);
+        $headers_set = 1;
     }
     $r->print($chunk);
 }
@@ -63,14 +73,21 @@ sub headers {
     $r->content_type( $response->header('Content-Type') );
     $r->status( $response->code );
     $r->status_line( join ' ', $response->code, $response->message );
+
     # Scan LWP response headers to generate Apache response headers
+    my ( $location_old, $location_new ) = split /[;,]+/,
+      $r->dir_config('LmLocationToReplace');
     $response->scan(
         sub {
-	    # Replace Location headers
-            $_[1] =~ s#^$base#$r->hostname#oe
-              if ( $_[0] =~ /Location/i );
+
+            # Replace Location headers
+            $_[1] =~ s#$location_old#$location_new#oe
+              if ( $location_old and $location_new and $_[0] =~ /Location/i );
             $r->header_out(@_);
-            #$r->warn( "Header out:" . $_[0] . ": " . $_[1] );
+            $r->server->log->debug( __PACKAGE__
+                  . ": header pushed to the client: "
+                  . $_[0] . ": "
+                  . $_[1] );
             1;
         }
     );
@@ -94,7 +111,8 @@ apache/conf/httpd.conf:
   PerlModule Lemonldap::NG::Handler::Proxy
   SetHandler perl-script
   PerlHandler Lemonldap::NG::Handler::Proxy
-  PerlSetVar LmProxyPass https://real-server.com/
+  PerlSetVar LmProxyPass http://real-server.com/
+  PerlSetVar LmLocationToReplace http://real-server/,https://lemon.server/
 
   # Or just on a Location
   PerlModule Lemonldap::NG::Handler::Proxy
@@ -102,6 +120,7 @@ apache/conf/httpd.conf:
     SetHandler perl-script
     PerlHandler Lemonldap::NG::Handler::Proxy
     PerlSetVar LmProxyPass https://real-server.com/
+    PerlSetVar LmLocationToReplace http://real-server/,https://lemon.server/
   </Location>
 
 =head1 DESCRIPTION
@@ -126,6 +145,15 @@ L<Lemonldap::NG::IdentityProvider>)
 
 This library adds a reverse-proxy functionnality to Apache. It is useful to
 manage redirections if the remote host use it without the good domain.
+
+=head2 PARAMETERS
+
+=over
+
+=item * B<LmProxyPass (required)>: Real server to push request to
+
+=item * B<LmLocationToReplace> (optional): substitution to do to avoid bad
+redirections. See synopsys for usage.
 
 =head2 EXPORT
 
