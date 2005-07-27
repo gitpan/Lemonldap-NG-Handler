@@ -9,7 +9,7 @@ use Apache::Constants qw(:common :response);
 use MIME::Base64;
 use Exporter 'import';
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 our %EXPORT_TAGS = (
     localStorage => [
@@ -84,7 +84,6 @@ sub localInit {
     # be used at the starting of Apache and so with the "root" privileges. Local
     # Storage is also initialized just after Apache's fork and privilege lost.
     my $tmp = sub {
-        Apache->server->log->info("Coucou");
         return $class->initLocalStorage;
     };
     Apache->push_handlers( PerlChildInitHandler => $tmp );
@@ -93,8 +92,8 @@ sub localInit {
     # performances.
     $tmp = sub { return $class->cleanLocalStorage };
     Apache->push_handlers( PerlCleanupHandler => $tmp );
-    Apache->server->log->debug(
-        "H: $class->initLocalStorage & $class->cleanLocalStorage pushed");
+    Apache->server->log->debug( __PACKAGE__
+          . ": $class->initLocalStorage & $class->cleanLocalStorage pushed" );
 }
 
 sub globalInit {
@@ -195,6 +194,7 @@ sub conditionSub {
     $cond =~ s/\$(\w+)/\$datas->{$1}/g;
     my $sub;
     eval '$sub = sub {return (' . $cond . ')}';
+    return $sub;
 }
 
 sub grant {

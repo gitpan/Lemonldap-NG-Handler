@@ -8,3 +8,8 @@ Revision history for Perl extension Lemonldap::NG::Handler.
 	- bug corrections
 	- Vhost.pm modification: add header personalization per virtual host
 
+0.03  Wed Jul 27 21:00:00 2005
+	- bug correction in Handler.pm: &conditionSub returned nothing except
+	for default configuration
+	- modification in SharedConf.pm : adding (undocumented)
+	functionnalities to be able to dinamically update configuration

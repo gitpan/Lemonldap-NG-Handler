@@ -11,7 +11,7 @@ use Apache::Log;
 
 our @ISA = qw(Lemonldap::NG::Handler);
 
-our $VERSION    = '0.02';
+our $VERSION    = '0.03';
 our $numConf    = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -39,6 +39,46 @@ sub localInit($$) {
 
 }
 
+sub handler($$) {
+    my($class) = shift;
+    if ( time() - $lastReload > $reloadTime ) {
+        unless ($class->reload) {
+            $_[0]->log_error(__PACKAGE__.": No configuration found");
+            return SERVER_ERROR;
+        }
+    }
+    return $class->SUPER::handler(@_);
+}
+
+sub confTest {
+    my($class,$args) = @_;
+    if($args->{_n_conf}) {
+        return 1 if $args->{_n_conf} == $numConf;
+	$class->globalInit($args);
+	return 1;
+    }
+    return 0;
+}
+
+sub confVerif {
+    my $class = shift;
+    my($r,$args);
+    return SERVER_ERROR unless ($refLocalStorage and $args = $refLocalStorage->get("conf"));
+    unless($class->confTest) {
+	# TODO: LOCK
+	unless($class->confTest) {
+	    $class->confUpdate;
+	}
+	# TODO: UNLOCK;
+    }
+}
+
+sub confUpdate {
+    my $class = shift;
+    $class->setConf($class->getConf);
+    OK;
+}
+
 sub setConf {
     my ( $class, $args ) = @_;
     $numConf++;
@@ -47,27 +87,16 @@ sub setConf {
     $class->globalInit($args);
 }
 
-sub reload ($$) {
-    my ($class) = shift;
-    Apache->server->log->debug(
-        __PACKAGE__ . ": child (re)load configuration" );
-    my $args;
-    return 0
-      unless ( $refLocalStorage and $args = $refLocalStorage->get("conf") );
-    $class->setconf($args) if $args->{_n_conf} != $numConf;
-    $lastReload = time();
-    1;
+sub getConf {
+    # MUST BE OVERLOADED
+    return {};
 }
 
-sub handler($$) {
-    my ($class) = shift;
-    if ( time() - $lastReload > $reloadTime ) {
-        unless ( $class->reload ) {
-            $_[0]->log_error( __PACKAGE__ . ": No configuration found" );
-            return SERVER_ERROR;
-        }
-    }
-    return $class->SUPER::handler(@_);
+sub refresh($$) {
+    my($class,$r)=@_;
+    Apache->server->log->debug(__PACKAGE__.": I've to reload configuration");
+    $class->confUpdate;
+    DONE;
 }
 
 1;
