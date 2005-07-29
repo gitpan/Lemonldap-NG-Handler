@@ -11,7 +11,7 @@ use Apache::Log;
 
 our @ISA = qw(Lemonldap::NG::Handler);
 
-our $VERSION    = '0.03';
+our $VERSION    = '0.04';
 our $numConf    = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -32,7 +32,7 @@ sub localInit($$) {
     if ( $ENV{MOD_PERL} ) {
 
         # Update configuration for each new Apache's process
-        my $tmp = sub { return $class->reload };
+        my $tmp = sub { return $class->confVerif };
         Apache->push_handlers( PerlChildInitHandler => $tmp );
     }
     $class->SUPER::localInit(@_);
@@ -40,10 +40,10 @@ sub localInit($$) {
 }
 
 sub handler($$) {
-    my($class) = shift;
+    my ($class) = shift;
     if ( time() - $lastReload > $reloadTime ) {
-        unless ($class->reload) {
-            $_[0]->log_error(__PACKAGE__.": No configuration found");
+        unless ( $class->confVerif == OK ) {
+            $_[0]->log_error( __PACKAGE__ . ": No configuration found" );
             return SERVER_ERROR;
         }
     }
@@ -51,31 +51,35 @@ sub handler($$) {
 }
 
 sub confTest {
-    my($class,$args) = @_;
-    if($args->{_n_conf}) {
+    my ( $class, $args ) = @_;
+    if ( $args->{_n_conf} ) {
         return 1 if $args->{_n_conf} == $numConf;
-	$class->globalInit($args);
-	return 1;
+        $class->globalInit($args);
+        return 1;
     }
     return 0;
 }
 
 sub confVerif {
     my $class = shift;
-    my($r,$args);
-    return SERVER_ERROR unless ($refLocalStorage and $args = $refLocalStorage->get("conf"));
-    unless($class->confTest) {
-	# TODO: LOCK
-	unless($class->confTest) {
-	    $class->confUpdate;
-	}
-	# TODO: UNLOCK;
+    my ( $r, $args );
+    return SERVER_ERROR
+      unless ( $refLocalStorage and $args = $refLocalStorage->get("conf") );
+    unless ( $class->confTest ) {
+
+        # TODO: LOCK
+        unless ( $class->confTest ) {
+            $class->confUpdate;
+        }
+
+        # TODO: UNLOCK;
     }
+    OK;
 }
 
 sub confUpdate {
     my $class = shift;
-    $class->setConf($class->getConf);
+    $class->setConf( $class->getConf );
     OK;
 }
 
@@ -88,32 +92,47 @@ sub setConf {
 }
 
 sub getConf {
+
     # MUST BE OVERLOADED
     return {};
 }
 
 sub refresh($$) {
-    my($class,$r)=@_;
-    Apache->server->log->debug(__PACKAGE__.": I've to reload configuration");
+    my ( $class, $r ) = @_;
+    Apache->server->log->debug(
+        __PACKAGE__ . ": I've to reload configuration" );
     $class->confUpdate;
     DONE;
 }
 
 1;
 __END__
-# Below is stub documentation for your module. You'd better edit it!
 
 =head1 NAME
 
 Lemonldap::NG::Handler::SharedConf - Perl extension for adding dynamic
-configuration to Lemonldap::NG::Handler
+configuration to Lemonldap::NG::Handler. To use for inheritance.
 
 =head1 SYNOPSIS
 
   package My::Package;
   use Lemonldap::NG::Handler::SharedConf;
   @ISA = qw(Lemonldap::NG::Handler::SharedConf);
-
+  
+  sub getConf {
+    # Write here your configuration download system
+    # It has to return a hash reference containing
+    # global configuration variables:
+    # {
+    #  locationRules => { '^/.*$' => '$ou =~ /brh/'},
+    #  globalStorage        => 'Apache::Session::MySQL',
+    #  globalStorageOptions => {
+    #    ...
+    #  }
+    #  portal               => 'https://portal/',
+    # }
+  }
+  
   __PACKAGE__->init ( {
     localStorage        => "Cache::DBFile",
     localStorageOptions => {},
@@ -122,16 +141,13 @@ configuration to Lemonldap::NG::Handler
 
 Change configuration :
 
-  # In a childInitHandler method or another method called after Apache's fork
-  __PACKAGE__->setConf ( {
-      locationRules => { '^/.*$' => '$ou =~ /brh/'},
-      globalStorage        => 'Apache::Session::MySQL',
-      globalStorageOptions => {
-        ...
-      }
-      portal               => 'https://portal/',
-    }
-  );
+  # <apache>/conf/httpd.conf
+  <Location /location/that/I/ve/choosed>
+    Order deny,allow
+    Deny from all
+    Allow from my.manager.com
+    PerlInitHandler My::Package::refresh
+  </Location>
 
 =head1 DESCRIPTION
 
@@ -140,24 +156,14 @@ the build of a protected area with a few changes in the application (they just
 have to read some headers for accounting).
 
 It manages both authentication and authorization and provides headers for
-accounting. So you can have a full AAA protection for your web space. There are
-two ways to build a cross domain authentication:
+accounting. So you can have a full AAA protection for your web space.
 
-=over
+This library splits L<Lemonldap::NG::Handler> initialization into 2 phases:
+local initialization and global configuration set. It can be used if you want
+to write a module that can change its global configuration without restarting
+Apache.
 
-=item * Cross domain authentication itself (L<Lemonldap::Portal::Cda> I<(not yet implemented in Lemonldap::NG)>)
-
-=item * "Liberty Alliance" (see L<Lemonldap::ServiceProvider> and
-L<Lemonldap::IdentityProvider>)
-
-=back
-
-This library splits L<Lemonldap::NG::Handler> initialization into 2 phases: local
-initialization and global configuration set. It can be used if you want to be
-able to change the handler configuration without restarting Apache. See also
-L<Lemonldap::Manager::Handler> to see an example of use.
-
-=head2 SUBROUTINES
+=head2 OVERLOADED SUBROUTINES
 
 =head3 init
 
@@ -165,16 +171,29 @@ Like L<Lemonldap::NG::Handler>::init() but read only localStorage related option
 You may change default time between two configuration checks with the
 C<reloadTime> parameter (default 600s).
 
-=head3 setConf
+=head2 SUBROUTINE TO WRITE
 
-Like L<Lemonldap::NG::Handler>::init() but does not read localStorage related
-options. This method has to be used at PerlChildInitHandler stage else, the
-server will return an error 500 (internal server error) until it obtains a
-valid configuration.
+=head3 getConf
+
+Does nothing by default. You've to overload it to write your own configuration
+download system.
 
 =head2 EXPORT
 
 Same as L<Lemonldap::NG::Handler>.
+
+=head1 OPERATION
+
+Each new Apache child checks if there's a configuration stored in the local
+store. If not, it calls getConf to get one and store it in the local store by
+calling setconf.
+
+Every 600 seconds, each Apache child checks if the local stored configuration
+has changed and reload it if it has.
+
+When refresh subroutine is called (by http for example: see synopsis), getConf
+is called to get the new configuration and setconf is called to store it in the
+local store.
 
 =head1 SEE ALSO
 
@@ -188,7 +207,7 @@ Same as L<Lemonldap::NG::Handler>.
 
 =head1 AUTHOR
 
-Xavier Guimard, E<lt>guimard@E<gt>
+Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 

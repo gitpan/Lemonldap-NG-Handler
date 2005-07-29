@@ -13,3 +13,6 @@ Revision history for Perl extension Lemonldap::NG::Handler.
 	for default configuration
 	- modification in SharedConf.pm : adding (undocumented)
 	functionnalities to be able to dinamically update configuration
+
+0.04  Fri Jul 29 16:02:00 2005
+	- bug correction in SharedConf.pm
