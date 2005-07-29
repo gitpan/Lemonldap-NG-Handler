@@ -9,7 +9,7 @@ use Apache::Constants qw(:common :response);
 use MIME::Base64;
 use Exporter 'import';
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 our %EXPORT_TAGS = (
     localStorage => [

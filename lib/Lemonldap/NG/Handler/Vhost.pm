@@ -4,7 +4,7 @@ use Lemonldap::NG::Handler qw(:locationRules :headers);
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.02';
+our $VERSION = '0.05';
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
@@ -70,7 +70,7 @@ sub sendHeaders {
 }
 
 sub grant {
-    my ( $class, $uri ) = shift;
+    my ( $class, $uri ) = @_;
     my $vhost = $apacheRequest->hostname;
     for ( my $i = 0 ; $i < $locationCount->{$vhost} ; $i++ ) {
         if ( $uri =~ $locationRegexp->{$vhost}->[$i] ) {
