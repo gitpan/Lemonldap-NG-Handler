@@ -11,7 +11,7 @@ use Apache::Log;
 
 our @ISA = qw(Lemonldap::NG::Handler);
 
-our $VERSION    = '0.04';
+our $VERSION    = '0.05';
 our $numConf    = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -21,11 +21,15 @@ push( @{ $EXPORT_TAGS{$_} }, qw($reloadTime $lastReload) )
 
 push @EXPORT_OK, qw($reloadTime $lastReload);
 
+# INIT PROCESS
+
+# init is overloaded to call only localInit. globalInit is called later
 sub init {
     my $class = shift;
     $class->localInit(@_);
 }
 
+# localInit is overloaded to call confVerif() on Apache child initialization
 sub localInit($$) {
     my $class = shift;
     $reloadTime = $_[0]->{reloadTime} || 600;
@@ -39,6 +43,8 @@ sub localInit($$) {
 
 }
 
+# Each $reloadTime, the Apache child verify if its configuration is the same
+# as the configuration stored in the local storage.
 sub handler($$) {
     my ($class) = shift;
     if ( time() - $lastReload > $reloadTime ) {
@@ -65,10 +71,10 @@ sub confVerif {
     my ( $r, $args );
     return SERVER_ERROR
       unless ( $refLocalStorage and $args = $refLocalStorage->get("conf") );
-    unless ( $class->confTest ) {
+    unless ( $class->confTest($args) ) {
 
         # TODO: LOCK
-        unless ( $class->confTest ) {
+        unless ( $class->confTest($args) ) {
             $class->confUpdate;
         }
 
@@ -131,6 +137,7 @@ configuration to Lemonldap::NG::Handler. To use for inheritance.
     #  }
     #  portal               => 'https://portal/',
     # }
+    # See L<Lemonldap::NG::Handler> for more
   }
   
   __PACKAGE__->init ( {
@@ -139,7 +146,8 @@ configuration to Lemonldap::NG::Handler. To use for inheritance.
     reloadTime          => 1200, # Default: 600
   } );
 
-Change configuration :
+The configuration is loaded only at Apache start. Create an URI to force
+configuration reload :
 
   # <apache>/conf/httpd.conf
   <Location /location/that/I/ve/choosed>

@@ -19,3 +19,7 @@ Revision history for Perl extension Lemonldap::NG::Handler.
 
 0.05  Fri Jul 29 17:32:00 2005
 	- bug correction in Vhost.pm
+
+0.06  Thu Jul 13 19:21:00 2006
+	- comments and little correction in Handler.pm
+	- bug correction in SharedConf.pm
