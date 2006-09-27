@@ -9,7 +9,7 @@ use Apache::Constants qw(:common :response);
 use MIME::Base64;
 use Exporter 'import';
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 our %EXPORT_TAGS = (
     localStorage => [
@@ -214,7 +214,7 @@ sub forgeHeadersInit {
 
     my $sub;
     foreach ( keys %tmp ) {
-        $sub .= "\$apacheRequest->header_in('$_' => " . $tmp{$_} . ");";
+        $sub .= "\$apacheRequest->header_in('$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
     }
     $sub = "\$forgeHeaders = sub {$sub};";
     eval "$sub";
