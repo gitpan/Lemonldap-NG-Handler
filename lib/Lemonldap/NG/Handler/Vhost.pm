@@ -47,7 +47,9 @@ sub forgeHeadersInit {
 
         my $sub;
         foreach ( keys %tmp ) {
-            $sub .= "\$apacheRequest->header_in('$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
+            $sub .=
+              "\$apacheRequest->header_in('$_' => join('',split(/[\\r\\n]+/,"
+              . $tmp{$_} . ")));";
         }
         $sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
         eval "$sub";
@@ -183,10 +185,15 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005 by Xavier Guimard
+Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
-This library is free software; you can redistribute it and/or modify it under
-same terms as Perl itself, either Perl version 5.8.4 or, at your option, any
-later version of Perl 5 you may have available.
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.4 or,
+at your option, any later version of Perl 5 you may have available.
+
+Lemonldap was originaly written by Eric german who decided to publish him in
+2003 under the terms of the GNU General Public License version 2.
+Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
+policies in a same Apache virtual host.
 
 =cut

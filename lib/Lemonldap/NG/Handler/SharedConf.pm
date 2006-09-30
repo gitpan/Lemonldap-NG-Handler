@@ -40,7 +40,6 @@ sub localInit($$) {
         Apache->push_handlers( PerlChildInitHandler => $tmp );
     }
     $class->SUPER::localInit(@_);
-
 }
 
 # Each $reloadTime, the Apache child verify if its configuration is the same
@@ -74,10 +73,10 @@ sub confVerif {
     unless ( $class->confTest($args) ) {
 
         # TODO: LOCK
-        unless ( $class->confTest($args) ) {
-            $class->confUpdate;
-        }
+        #unless ( $class->confTest($args) ) {
+        $class->confUpdate;
 
+        #}
         # TODO: UNLOCK;
     }
     OK;
@@ -85,7 +84,11 @@ sub confVerif {
 
 sub confUpdate {
     my $class = shift;
-    $class->setConf( $class->getConf );
+    my $tmp   = $class->getConf;
+
+    # getConf can return an Apache constant in case of error
+    return $tmp unless (%$tmp);
+    $class->setConf($tmp);
     OK;
 }
 
@@ -106,7 +109,7 @@ sub getConf {
 sub refresh($$) {
     my ( $class, $r ) = @_;
     Apache->server->log->debug(
-        __PACKAGE__ . ": I've to reload configuration" );
+        __PACKAGE__ . ": request for configuration reload" );
     $class->confUpdate;
     DONE;
 }
@@ -118,6 +121,8 @@ __END__
 
 Lemonldap::NG::Handler::SharedConf - Perl extension for adding dynamic
 configuration to Lemonldap::NG::Handler. To use for inheritance.
+
+See L<Lemonldap::NG::Handler::SharedConf::DBI> for a complete example.
 
 =head1 SYNOPSIS
 
@@ -147,7 +152,7 @@ configuration to Lemonldap::NG::Handler. To use for inheritance.
   } );
 
 The configuration is loaded only at Apache start. Create an URI to force
-configuration reload :
+configuration reload, so you don't need to restart Apache at each change :
 
   # <apache>/conf/httpd.conf
   <Location /location/that/I/ve/choosed>
@@ -205,11 +210,7 @@ local store.
 
 =head1 SEE ALSO
 
-=over
-
-=item * L<Lemonldap::NG::Handler>
-
-=item * L<http://lemonldap.sourceforge.net/>
+L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Handler::SharedConf::DBI>
 
 =back
 
@@ -219,7 +220,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005 by Xavier Guimard
+Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
@@ -227,5 +228,7 @@ at your option, any later version of Perl 5 you may have available.
 
 Lemonldap was originaly written by Eric german who decided to publish him in
 2003 under the terms of the GNU General Public License version 2.
+Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
+policies in a same Apache virtual host.
 
 =cut

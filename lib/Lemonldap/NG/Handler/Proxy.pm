@@ -169,23 +169,15 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2004, 2005 by Eric German E<amp> Xavier Guimard
+Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.4 or,
+at your option, any later version of Perl 5 you may have available.
 
 Lemonldap was originaly written by Eric german who decided to publish him in
 2003 under the terms of the GNU General Public License version 2.
-
-=over
-
-=item This library is free software; you can redistribute it and/or modify it
-under same terms as Perl itself, either Perl version 5.8.4 or, at your option,
-any later version of Perl 5 you may have available.
-
-=item The primary copyright holder is Eric German.
-
-=item Portions are copyrighted under the GNU General Public License, Version 2
-
-=item Portions are copyrighted by Doug MacEachern and Lincoln Stein.
-
-=back
+Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
+policies in a same Apache virtual host.
 
 =cut

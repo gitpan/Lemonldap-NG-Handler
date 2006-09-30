@@ -6,8 +6,10 @@ lib/Lemonldap/NG/Handler.pm
 lib/Lemonldap/NG/Handler/Proxy.pm
 lib/Lemonldap/NG/Handler/Vhost.pm
 lib/Lemonldap/NG/Handler/SharedConf.pm
+lib/Lemonldap/NG/Handler/SharedConf/DBI.pm
 t/Lemonldap-NG-Handler.t
 t/Lemonldap-NG-Handler-Proxy.t
 t/Lemonldap-NG-Handler-Vhost.t
 t/Lemonldap-NG-Handler-SharedConf.t
+t/Lemonldap-NG-Handler-SharedConf-DBI.t
 META.yml                                 Module meta-data (added by MakeMaker)

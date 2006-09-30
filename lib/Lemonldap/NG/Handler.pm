@@ -9,7 +9,7 @@ use Apache::Constants qw(:common :response);
 use MIME::Base64;
 use Exporter 'import';
 
-our $VERSION = '0.07';
+our $VERSION = '0.1';
 
 our %EXPORT_TAGS = (
     localStorage => [
@@ -82,13 +82,13 @@ sub init {
 # Local storage initialization
 sub localInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug(__PACKAGE__ . ": localInit");
-    if($localStorage = $args->{localStorage}) {
+    Apache->server->log->debug( __PACKAGE__ . ": localInit" );
+    if ( $localStorage = $args->{localStorage} ) {
         $localStorageOptions = $args->{localStorageOptions};
-        $localStorageOptions->{namespace} ||= "lemonldap";
+        $localStorageOptions->{namespace}          ||= "lemonldap";
         $localStorageOptions->{default_expires_in} ||= 600;
         eval "use $localStorage;";
-	die ("Unable to load $localStorage") if($@);
+        die("Unable to load $localStorage") if ($@);
     }
 
     # We don't initialise local storage in the "init" subroutine because it can
@@ -103,14 +103,14 @@ sub localInit {
     # performances.
     $tmp = sub { return $class->cleanLocalStorage };
     Apache->push_handlers( PerlCleanupHandler => $tmp );
-    Apache->server->log->debug( __PACKAGE__ .
-             ": $class->initLocalStorage & $class->cleanLocalStorage pushed" );
+    Apache->server->log->debug( __PACKAGE__
+          . ": $class->initLocalStorage & $class->cleanLocalStorage pushed" );
 }
 
 # Global initialization process :
 sub globalInit {
     my $class = shift;
-    Apache->server->log->debug(__PACKAGE__ . ": Global initialization");
+    Apache->server->log->debug( __PACKAGE__ . ": Global initialization" );
     $class->locationRulesInit(@_);
     $class->defaultValuesInit(@_);
     $class->portalInit(@_);
@@ -125,7 +125,7 @@ sub globalInit {
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug(__PACKAGE__ . ": locationRulesInit");
+    Apache->server->log->debug( __PACKAGE__ . ": locationRulesInit" );
     $locationCount = 0;
 
     # Pre compilation : both regexp and conditions
@@ -164,7 +164,7 @@ sub conditionSub {
 # defaultValuesInit : set default values for non-customized variables
 sub defaultValuesInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug(__PACKAGE__ . ": defaultValuesInit");
+    Apache->server->log->debug( __PACKAGE__ . ": defaultValuesInit" );
 
     # Other values
     $cookieName  = $args->{cookieName}  || 'lemon';
@@ -177,7 +177,7 @@ sub defaultValuesInit {
 # portalInit : verify that portal variable exists
 sub portalInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug(__PACKAGE__ . ": portalInit");
+    Apache->server->log->debug( __PACKAGE__ . ": portalInit" );
     $portal = $args->{portal} or die("portal parameter required");
 }
 
@@ -185,7 +185,7 @@ sub portalInit {
 # share user's variables
 sub globalStorageInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug(__PACKAGE__ . ": globalStorageInit");
+    Apache->server->log->debug( __PACKAGE__ . ": globalStorageInit" );
     $globalStorage = $args->{globalStorage} or die "globalStorage required";
     eval "use $globalStorage;";
     die($@) if ($@);
@@ -197,7 +197,7 @@ sub globalStorageInit {
 # application)
 sub forgeHeadersInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug(__PACKAGE__ . ": forgeHeadersInit");
+    Apache->server->log->debug( __PACKAGE__ . ": forgeHeadersInit" );
 
     # Creation of the subroutine who will generate headers
     my %tmp;
@@ -214,7 +214,9 @@ sub forgeHeadersInit {
 
     my $sub;
     foreach ( keys %tmp ) {
-        $sub .= "\$apacheRequest->header_in('$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
+        $sub .=
+          "\$apacheRequest->header_in('$_' => join('',split(/[\\r\\n]+/,"
+          . $tmp{$_} . ")));";
     }
     $sub = "\$forgeHeaders = sub {$sub};";
     eval "$sub";
@@ -437,9 +439,9 @@ Call your package in <apache-directory>/conf/httpd.conf
 
 =head1 DESCRIPTION
 
-Lemonldap is a simple Web-SSO based on Apache::Session modules. It simplifies
-the build of a protected area with a few changes in the application (they just
-have to read some headers for accounting).
+Lemonldap::NG is a simple Web-SSO based on Apache::Session modules. It
+simplifies the build of a protected area with a few changes in the application
+(they just have to read some headers for accounting).
 
 It manages both authentication and authorization and provides headers for
 accounting. So you can have a full AAA protection for your web space. There are
@@ -461,11 +463,18 @@ functionalities. For example :
 
 =over
 
-=item * L<Lemonldap::NG::Handler::SharedConfig> to be able to change handler
+=item * L<Lemonldap::NG::Handler::Vhost> to be able to manage different
+Apache virtual hosts with the same module
+
+=item * L<Lemonldap::NG::Handler::SharedConf> to be able to change handler
 configuration without restarting Apache
 
 =item * L<Lemonldap::NG::Handler::Proxy> to replace Apache mod_proxy if you
 have some problems (for example, managing redirections,...)
+
+=item * L<Lemonldap::NG::Handler::SharedConf::DBI> is a complete system that
+can be used to protect different hosts using a central database to manage
+configurations.
 
 =back
 
@@ -639,9 +648,8 @@ the global store by calling them C<$E<lt>varnameE<gt>>.
 
 =over
 
-=item * L<Lemonldap::NG::Portal(3)>, L<Lemonldap::NG::Handler::Proxy(3)>
-
-=item * L<http://lemonldap.sourceforge.net/>, L<http://projectliberty.org/>
+L<Lemonldap::NG::Handler::SharedConf::DBI>,
+L<Lemonldap::NG::Portal(3)>, L<Lemonldap::NG::Handler::Proxy(3)>,
 
 =head1 AUTHOR
 
@@ -649,24 +657,18 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2004, 2005 by Eric German E<amp> Xavier Guimard
+Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 Lemonldap was originaly written by Eric german who decided to publish him in
 2003 under the terms of the GNU General Public License version 2.
 
-=over
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.4 or,
+at your option, any later version of Perl 5 you may have available.
 
-=item * This library is free software; you can redistribute it and/or modify it
-under same terms as Perl itself, either Perl version 5.8.4 or, at your option,
-any later version of Perl 5 you may have available.
-
-=item * The primary copyright holder is Eric German.
-
-=item * Portions are copyrighted under the GNU General Public License,
-Version 2
-
-=item * Portions are copyrighted by Doug MacEachern and Lincoln Stein.
-
-=back
+Lemonldap was originaly written by Eric german who decided to publish him in
+2003 under the terms of the GNU General Public License version 2.
+Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
+policies in a same Apache virtual host.
 
 =cut
