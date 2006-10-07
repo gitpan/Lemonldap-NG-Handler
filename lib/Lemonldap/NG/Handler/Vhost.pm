@@ -34,7 +34,6 @@ sub locationRulesInit {
 
 sub forgeHeadersInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": forgeHeadersInit" );
 
     # Creation of the subroutine who will generate headers
     foreach my $vhost ( keys %{ $args->{exportedHeaders} } ) {
@@ -81,7 +80,7 @@ sub grant {
     }
     unless ( $defaultCondition->{$vhost} ) {
         Apache->server->log->warn(
-            "User rejected because VirtualHost $vhost has no configuration");
+            "User rejected because VirtualHost \"$vhost\" has no configuration");
     }
     return &{ $defaultCondition->{$vhost} };
 }

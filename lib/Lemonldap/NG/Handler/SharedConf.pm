@@ -11,10 +11,13 @@ use Apache::Log;
 
 our @ISA = qw(Lemonldap::NG::Handler);
 
-our $VERSION    = '0.05';
-our $numConf    = 0;
+our $VERSION    = '0.1';
+our $cfgNum    = 0;
 our $lastReload = 0;
 our $reloadTime;
+
+*EXPORT_TAGS = *Lemonldap::NG::Handler::EXPORT_TAGS;
+*EXPORT_OK   = *Lemonldap::NG::Handler::EXPORT_OK;
 
 push( @{ $EXPORT_TAGS{$_} }, qw($reloadTime $lastReload) )
   foreach (qw(variables localStorage));
@@ -24,65 +27,53 @@ push @EXPORT_OK, qw($reloadTime $lastReload);
 # INIT PROCESS
 
 # init is overloaded to call only localInit. globalInit is called later
-sub init {
-    my $class = shift;
-    $class->localInit(@_);
-}
-
-# localInit is overloaded to call confVerif() on Apache child initialization
-sub localInit($$) {
-    my $class = shift;
-    $reloadTime = $_[0]->{reloadTime} || 600;
-    if ( $ENV{MOD_PERL} ) {
-
-        # Update configuration for each new Apache's process
-        my $tmp = sub { return $class->confVerif };
-        Apache->push_handlers( PerlChildInitHandler => $tmp );
-    }
-    $class->SUPER::localInit(@_);
+sub init($$) {
+    my($class,$args) = @_;
+    $reloadTime = $args->{reloadTime} || 600;
+    $class->localInit($args);
 }
 
 # Each $reloadTime, the Apache child verify if its configuration is the same
 # as the configuration stored in the local storage.
 sub handler($$) {
-    my ($class) = shift;
+    my ($class, $r) = @_;
     if ( time() - $lastReload > $reloadTime ) {
-        unless ( $class->confVerif == OK ) {
-            $_[0]->log_error( __PACKAGE__ . ": No configuration found" );
+        unless ( $class->localConfUpdate($r) == OK ) {
+            $r->log_error( __PACKAGE__ . ": No configuration found" );
             return SERVER_ERROR;
         }
     }
-    return $class->SUPER::handler(@_);
+    return $class->SUPER::handler($r);
 }
 
-sub confTest {
+sub confTest($$) {
     my ( $class, $args ) = @_;
     if ( $args->{_n_conf} ) {
-        return 1 if $args->{_n_conf} == $numConf;
+        return 1 if $args->{_n_conf} == $cfgNum;
         $class->globalInit($args);
         return 1;
     }
     return 0;
 }
 
-sub confVerif {
-    my $class = shift;
-    my ( $r, $args );
-    return SERVER_ERROR
-      unless ( $refLocalStorage and $args = $refLocalStorage->get("conf") );
-    unless ( $class->confTest($args) ) {
+sub localConfUpdate($$) {
+    my ($class,$r) = @_;
+    my $args;
+    return SERVER_ERROR unless ( $refLocalStorage );
+    unless ( $args = $refLocalStorage->get("conf") and $class->confTest($args) ) {
 
         # TODO: LOCK
         #unless ( $class->confTest($args) ) {
-        $class->confUpdate;
+        $class->globalConfUpdate($r);
 
         #}
         # TODO: UNLOCK;
     }
+    $lastReload = time();
     OK;
 }
 
-sub confUpdate {
+sub globalConfUpdate {
     my $class = shift;
     my $tmp   = $class->getConf;
 
@@ -94,8 +85,8 @@ sub confUpdate {
 
 sub setConf {
     my ( $class, $args ) = @_;
-    $numConf++;
-    $args->{_n_conf} = $numConf;
+    $cfgNum++;
+    $args->{_n_conf} = $cfgNum;
     $refLocalStorage->set( "conf", $args, $EXPIRES_NEVER );
     $class->globalInit($args);
 }
@@ -108,10 +99,16 @@ sub getConf {
 
 sub refresh($$) {
     my ( $class, $r ) = @_;
-    Apache->server->log->debug(
+    Apache->server->log->info(
         __PACKAGE__ . ": request for configuration reload" );
-    $class->confUpdate;
-    DONE;
+    $r->handler ( "perl-script" );
+    if ( $class->globalConfUpdate($r) == OK ) {
+        $r->push_handlers ( PerlHandler => sub { OK } );
+    }
+    else {
+        $r->push_handlers ( PerlHandler => sub { SERVER_ERROR } );
+    }
+    return DONE;
 }
 
 1;
@@ -159,7 +156,7 @@ configuration reload, so you don't need to restart Apache at each change :
     Order deny,allow
     Deny from all
     Allow from my.manager.com
-    PerlInitHandler My::Package::refresh
+    PerlInitHandler My::Package->refresh
   </Location>
 
 =head1 DESCRIPTION

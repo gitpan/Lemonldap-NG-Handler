@@ -4,36 +4,40 @@ use strict;
 
 use UNIVERSAL qw(can);
 use Apache::Constants qw(:common :response);
-use Lemonldap::NG::Handler::SharedConf qw(:all);
 use Lemonldap::NG::Handler::Vhost;
+use Lemonldap::NG::Handler::SharedConf qw(:all);
 use DBI;
 use Storable qw(thaw);
 use MIME::Base64;
 
-our $VERSION = '0.01';
+our $VERSION = '0.1';
 
-our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
+our @ISA = qw(Lemonldap::NG::Handler::Vhosts Lemonldap::NG::Handler::SharedConf);
 
-our ( $dbiChain, $dbiUser, $dbiPassword, $sessionType );
+*EXPORT_TAGS = *Lemonldap::NG::Handler::SharedConf::EXPORT_TAGS;
+*EXPORT_OK   = *Lemonldap::NG::Handler::SharedConf::EXPORT_OK;
+
+our ( $dbiChain, $dbiUser, $dbiPassword );
 
 my ( $dbh, $cfgNum ) = ( undef, 0 );
 
 sub localInit($$) {
-    my ( $class, $args ) = @_;
-    ${$_} = $args->{$_} foreach qw(dbiChain dbiUser dbiPassword);
-    $class->SUPER::localInit(@_);
+    my($class,$args) = @_;
+    $dbiChain = $args->{dbiChain} or die "No dbiChain found";
+    $dbiUser = $args->{dbiUser} or Apache->server->log->warn("No dbiUser found");
+    $dbiPassword = $args->{dbiPassword} or Apache->server->log->warn("No dbiPassword found");
+    $class->SUPER::localInit($args);
 }
 
 sub getConf {
-    my ($class) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": getConf" );
+    my $class = shift;
     $dbh = DBI->connect_cached( $dbiChain, $dbiUser, $dbiPassword );
     my $sth = $dbh->prepare("SELECT max(cfgNum) from config");
     $sth->execute();
     my @row = $sth->fetchrow_array;
     unless ( $row[0] ) {
-        Apache->server->log->error( __PACKAGE__ . "No configuration found" );
-        return SERVER_ERROR;
+        Apache->server->log->error( __PACKAGE__ . ": getConf: No configuration found" );
+        return undef;
     }
     Apache->server->log->notice( __PACKAGE__
           . ": configuration found: "

@@ -9,7 +9,7 @@ use Apache::Constants qw(:common :response);
 use MIME::Base64;
 use Exporter 'import';
 
-our $VERSION = '0.1';
+our $VERSION = '0.11';
 
 our %EXPORT_TAGS = (
     localStorage => [
@@ -73,44 +73,48 @@ our (
 #          a shared configuration, init() is overloaded to call only
 #          localInit; globalInit is called later when the configuration
 #          is loaded.
-sub init {
+sub init($$) {
     my $class = shift;
     $class->localInit(@_);
     $class->globalInit(@_);
 }
 
 # Local storage initialization
-sub localInit {
+sub localInit($$) {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": localInit" );
     if ( $localStorage = $args->{localStorage} ) {
         $localStorageOptions = $args->{localStorageOptions};
         $localStorageOptions->{namespace}          ||= "lemonldap";
         $localStorageOptions->{default_expires_in} ||= 600;
+
         eval "use $localStorage;";
         die("Unable to load $localStorage") if ($@);
+	# At each Apache (re)start, we've to clear the cache to avoid living
+	# with old datas
+	eval '$refLocalStorage = new '
+	  . $localStorage
+	  . '($localStorageOptions);';
+	if ( defined $refLocalStorage ) {
+	    $refLocalStorage->clear();
+	}
+	else {
+	    Apache->server->log->error("Unable to clear local cache: $@");
+	}
+        # We don't initialise local storage in the "init" subroutine because it can
+        # be used at the starting of Apache and so with the "root" privileges. Local
+        # Storage is also initialized just after Apache's fork and privilege lost.
+	no strict;
+	Apache->push_handlers( PerlChildInitHandler => sub { return $class->initLocalStorage(@_); } );
+    
+        # Local storage is cleaned after giving the content of the page to increase
+        # performances.
+        Apache->push_handlers( PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); } );
     }
-
-    # We don't initialise local storage in the "init" subroutine because it can
-    # be used at the starting of Apache and so with the "root" privileges. Local
-    # Storage is also initialized just after Apache's fork and privilege lost.
-    my $tmp = sub {
-        return $class->initLocalStorage;
-    };
-    Apache->push_handlers( PerlChildInitHandler => $tmp );
-
-    # Local storage is cleaned after giving the content of the page to increase
-    # performances.
-    $tmp = sub { return $class->cleanLocalStorage };
-    Apache->push_handlers( PerlCleanupHandler => $tmp );
-    Apache->server->log->debug( __PACKAGE__
-          . ": $class->initLocalStorage & $class->cleanLocalStorage pushed" );
 }
 
 # Global initialization process :
 sub globalInit {
     my $class = shift;
-    Apache->server->log->debug( __PACKAGE__ . ": Global initialization" );
     $class->locationRulesInit(@_);
     $class->defaultValuesInit(@_);
     $class->portalInit(@_);
@@ -125,7 +129,6 @@ sub globalInit {
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": locationRulesInit" );
     $locationCount = 0;
 
     # Pre compilation : both regexp and conditions
@@ -164,7 +167,6 @@ sub conditionSub {
 # defaultValuesInit : set default values for non-customized variables
 sub defaultValuesInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": defaultValuesInit" );
 
     # Other values
     $cookieName  = $args->{cookieName}  || 'lemon';
@@ -177,7 +179,6 @@ sub defaultValuesInit {
 # portalInit : verify that portal variable exists
 sub portalInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": portalInit" );
     $portal = $args->{portal} or die("portal parameter required");
 }
 
@@ -185,7 +186,6 @@ sub portalInit {
 # share user's variables
 sub globalStorageInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": globalStorageInit" );
     $globalStorage = $args->{globalStorage} or die "globalStorage required";
     eval "use $globalStorage;";
     die($@) if ($@);
@@ -197,7 +197,6 @@ sub globalStorageInit {
 # application)
 sub forgeHeadersInit {
     my ( $class, $args ) = @_;
-    Apache->server->log->debug( __PACKAGE__ . ": forgeHeadersInit" );
 
     # Creation of the subroutine who will generate headers
     my %tmp;
@@ -243,9 +242,9 @@ sub grant {
 sub forbidden {
 
     # We use Apache::Log here
-    $apacheRequest->log->notice( "The user "
+    $apacheRequest->log->notice( 'The user "'
           . $datas->{$whatToTrace}
-          . " was reject when he tried to access to "
+          . '" was reject when he tried to access to '
           . $_[1] );
     return FORBIDDEN;
 }
@@ -267,7 +266,7 @@ sub goToPortal() {
           . $url );
     $urlc_init =~ s/[\n\s]//g;
     $apacheRequest->header_out( location => "$portal?url=$urlc_init" );
-    $apacheRequest->log->info( "Redirect "
+    $apacheRequest->log->debug( "Redirect "
           . $apacheRequest->connection->remote_ip
           . " to portal (url was $url)" );
     return REDIRECT;
@@ -345,12 +344,13 @@ sub sendHeaders {
 }
 
 sub initLocalStorage {
+    my($class,$r) = @_;
     if ( $localStorage and not $refLocalStorage ) {
         eval '$refLocalStorage = new '
           . $localStorage
           . '($localStorageOptions);';
     }
-    Apache->server->log->warn("Local cache initialization failed: $@")
+    $r->log_error("Local cache initialization failed: $@")
       unless ( defined $refLocalStorage );
     return DECLINED;
 }
@@ -438,6 +438,9 @@ Call your package in <apache-directory>/conf/httpd.conf
   </Location>
 
 =head1 DESCRIPTION
+
+Lemonldap::NG::Handler is designed to be overloaded. See
+L<Lemonldap::NG::Handler::SharedConf::DBI> for a complete system.
 
 Lemonldap::NG is a simple Web-SSO based on Apache::Session modules. It
 simplifies the build of a protected area with a few changes in the application
