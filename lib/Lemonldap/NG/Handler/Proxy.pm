@@ -3,25 +3,53 @@ package Lemonldap::NG::Handler::Proxy;
 use strict;
 use warnings;
 
-use Apache;
-use Apache::Constants;
+use Lemonldap::NG::Handler qw(:apache);
 use LWP::UserAgent;
 
-our $VERSION = '0.02';
+our $VERSION = '0.1';
+
+##########################################
+# COMPATIBILITY WITH APACHE AND APACHE 2 #
+##########################################
+
+use mod_perl;
+
+BEGIN {
+    if ( MP() == 2 ) {
+        Apache2::Const->import( -compile => [ ':common', ':response' ] );
+        Apache2::compat->import();
+    }
+    else {
+        Apache::Constants->import(':common');
+        Apache::Constants->import(':response');
+    }
+    *handler = MP() ? \&handler_mp2 : \&handler_mp1;
+}
+
+sub handler_mp1 ($$) { &run(@_) }
+
+sub handler_mp2 : method {
+    &run(@_);
+}
+
+########
+# MAIN #
+########
 
 # Shared variables
 our $r;
 our $base;
 our $headers_set;
 our $UA = new LWP::UserAgent;
+our $class;
 
 # IMPORTANT: LWP does not have to execute any redirection itself. This has to
 # be done by the client itself, else cookies and other information may
 # disappear.
 $UA->requests_redirectable( [] );
 
-sub handler {
-    $r = shift;
+sub run($$) {
+    ( $class, $r ) = @_;
     my $url = $r->uri;
     $url .= "?" . $r->args if ( $r->args );
     return DECLINED unless ( $base = $r->dir_config('LmProxyPass') );
@@ -33,10 +61,10 @@ sub handler {
             $_[1] =~ s/lemon=[^;]*;?// if ( $_[0] =~ /Cookie/i );
             return 1 if ( $_[1] =~ /^$/ );
             $request->header(@_) unless ( $_[0] =~ /^(Host|Referer)$/i );
-            $r->server->log->debug( __PACKAGE__
-                  . ": header pushed to the server: "
-                  . $_[0] . ": "
-                  . $_[1] );
+            $class->lmLog(
+                "$class: header pushed to the server: " . $_[0] . ": " . $_[1],
+                'debug'
+            );
             1;
         }
     );
@@ -53,7 +81,7 @@ sub handler {
     $headers_set = 0;
     my $response = $UA->request( $request, \&cb_content );
     if ( $response->code != 200 ) {
-        headers($response) unless ($headers_set);
+        $class->headers($response) unless ($headers_set);
         $r->print( $response->content );
     }
     return OK;
@@ -62,13 +90,14 @@ sub handler {
 sub cb_content {
     my $chunk = shift;
     unless ($headers_set) {
-        headers(shift);
+        $class->headers(shift);
         $headers_set = 1;
     }
     $r->print($chunk);
 }
 
 sub headers {
+    $class = shift;
     my $response = shift;
     $r->content_type( $response->header('Content-Type') );
     $r->status( $response->code );
@@ -84,10 +113,10 @@ sub headers {
             $_[1] =~ s#$location_old#$location_new#oe
               if ( $location_old and $location_new and $_[0] =~ /Location/i );
             $r->header_out(@_);
-            $r->server->log->debug( __PACKAGE__
-                  . ": header pushed to the client: "
-                  . $_[0] . ": "
-                  . $_[1] );
+            $class->lmLog(
+                "$class: header pushed to the client: " . $_[0] . ": " . $_[1],
+                'debug'
+            );
             1;
         }
     );

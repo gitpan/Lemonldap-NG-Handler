@@ -5,14 +5,19 @@ use strict;
 use warnings;
 
 use Lemonldap::NG::Handler qw(:all);
+use Lemonldap::NG::Handler::Vhost;
 use Cache::Cache qw($EXPIRES_NEVER);
-use Apache::Constants qw(:common);
-use Apache::Log;
 
-our @ISA = qw(Lemonldap::NG::Handler);
+BEGIN {
+    if ( MP() == 2 ) {
+        Apache2::compat->import();
+    }
+}
+
+our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler);
 
 our $VERSION    = '0.1';
-our $cfgNum    = 0;
+our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
 
@@ -28,18 +33,18 @@ push @EXPORT_OK, qw($reloadTime $lastReload);
 
 # init is overloaded to call only localInit. globalInit is called later
 sub init($$) {
-    my($class,$args) = @_;
+    my ( $class, $args ) = @_;
     $reloadTime = $args->{reloadTime} || 600;
     $class->localInit($args);
 }
 
 # Each $reloadTime, the Apache child verify if its configuration is the same
 # as the configuration stored in the local storage.
-sub handler($$) {
-    my ($class, $r) = @_;
+sub run($$) {
+    my ( $class, $r ) = @_;
     if ( time() - $lastReload > $reloadTime ) {
         unless ( $class->localConfUpdate($r) == OK ) {
-            $r->log_error( __PACKAGE__ . ": No configuration found" );
+            $class->lmLog( "$class: No configuration found", 'error' );
             return SERVER_ERROR;
         }
     }
@@ -57,10 +62,11 @@ sub confTest($$) {
 }
 
 sub localConfUpdate($$) {
-    my ($class,$r) = @_;
+    my ( $class, $r ) = @_;
     my $args;
-    return SERVER_ERROR unless ( $refLocalStorage );
-    unless ( $args = $refLocalStorage->get("conf") and $class->confTest($args) ) {
+    return SERVER_ERROR unless ($refLocalStorage);
+    unless ( $args = $refLocalStorage->get("conf") and $class->confTest($args) )
+    {
 
         # TODO: LOCK
         #unless ( $class->confTest($args) ) {
@@ -99,14 +105,13 @@ sub getConf {
 
 sub refresh($$) {
     my ( $class, $r ) = @_;
-    Apache->server->log->info(
-        __PACKAGE__ . ": request for configuration reload" );
-    $r->handler ( "perl-script" );
+    $class->lmLog( "$class: request for configuration reload", 'info' );
+    $r->handler("perl-script");
     if ( $class->globalConfUpdate($r) == OK ) {
-        $r->push_handlers ( PerlHandler => sub { OK } );
+        $r->push_handlers( PerlHandler => sub { OK } );
     }
     else {
-        $r->push_handlers ( PerlHandler => sub { SERVER_ERROR } );
+        $r->push_handlers( PerlHandler => sub { SERVER_ERROR } );
     }
     return DONE;
 }

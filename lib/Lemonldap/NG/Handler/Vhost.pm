@@ -4,7 +4,7 @@ use Lemonldap::NG::Handler qw(:locationRules :headers);
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.06';
+our $VERSION = '0.2';
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
@@ -40,20 +40,19 @@ sub forgeHeadersInit {
         my %tmp = %{ $args->{exportedHeaders}->{$vhost} };
         foreach ( keys %tmp ) {
             $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-            $tmp{$_} =~
-              s/\$datas->\{ip\}/\$apacheRequest->connection->remote_ip/g;
+            $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
         }
 
         my $sub;
         foreach ( keys %tmp ) {
             $sub .=
-              "\$apacheRequest->header_in('$_' => join('',split(/[\\r\\n]+/,"
+              "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
               . $tmp{$_} . ")));";
         }
         $sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
         eval "$sub";
-        Apache->server->log->error(
-            __PACKAGE__ . ": Unable to forge headers: $@ $sub" )
+        $class->lmLog( "$class: Unable to forge headers: $@ $sub",
+            'error' )
           if ($@);
     }
 }
@@ -66,7 +65,7 @@ sub sendHeaders {
         &{ $forgeHeaders->{$vhost} };
     }
     else {
-        $apacheRequest->header_in( 'Auth-User' => '$uid' );
+        lmSetHeaderIn( $apacheRequest, 'Auth-User' => '$uid' );
     }
 }
 
@@ -79,8 +78,10 @@ sub grant {
         }
     }
     unless ( $defaultCondition->{$vhost} ) {
-        Apache->server->log->warn(
-            "User rejected because VirtualHost \"$vhost\" has no configuration");
+        $class->lmLog(
+            "User rejected because VirtualHost \"$vhost\" has no configuration",
+            'warn'
+        );
     }
     return &{ $defaultCondition->{$vhost} };
 }

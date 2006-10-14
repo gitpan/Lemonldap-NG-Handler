@@ -3,16 +3,20 @@ package Lemonldap::NG::Handler::SharedConf::DBI;
 use strict;
 
 use UNIVERSAL qw(can);
-use Apache::Constants qw(:common :response);
-use Lemonldap::NG::Handler::Vhost;
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 use DBI;
 use Storable qw(thaw);
 use MIME::Base64;
 
-our $VERSION = '0.1';
+BEGIN {
+    if ( MP() == 2 ) {
+        Apache2::compat->import();
+    }
+}
 
-our @ISA = qw(Lemonldap::NG::Handler::Vhosts Lemonldap::NG::Handler::SharedConf);
+our $VERSION = '0.2';
+
+our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
 
 *EXPORT_TAGS = *Lemonldap::NG::Handler::SharedConf::EXPORT_TAGS;
 *EXPORT_OK   = *Lemonldap::NG::Handler::SharedConf::EXPORT_OK;
@@ -22,32 +26,32 @@ our ( $dbiChain, $dbiUser, $dbiPassword );
 my ( $dbh, $cfgNum ) = ( undef, 0 );
 
 sub localInit($$) {
-    my($class,$args) = @_;
+    my ( $class, $args ) = @_;
     $dbiChain = $args->{dbiChain} or die "No dbiChain found";
-    $dbiUser = $args->{dbiUser} or Apache->server->log->warn("No dbiUser found");
-    $dbiPassword = $args->{dbiPassword} or Apache->server->log->warn("No dbiPassword found");
+    $dbiUser = $args->{dbiUser} or $class->lmLog( "No dbiUser found", 'warn' );
+    $dbiPassword = $args->{dbiPassword}
+      or $class->lmLog( "No dbiPassword found", 'warn' );
     $class->SUPER::localInit($args);
 }
 
 sub getConf {
     my $class = shift;
     $dbh = DBI->connect_cached( $dbiChain, $dbiUser, $dbiPassword );
-    my $sth = $dbh->prepare("SELECT max(cfgNum) from config");
+    my $sth = $dbh->prepare("SELECT max(cfgNum) from lmConfig");
     $sth->execute();
     my @row = $sth->fetchrow_array;
     unless ( $row[0] ) {
-        Apache->server->log->error( __PACKAGE__ . ": getConf: No configuration found" );
+        $class->lmLog( "$class: getConf: No configuration found", 'error' );
         return undef;
     }
-    Apache->server->log->notice( __PACKAGE__
-          . ": configuration found: "
-          . $row[0]
-          . ", previous was: $cfgNum" );
+    $class->lmLog(
+        "$class: configuration found: " . $row[0] . ", previous was: $cfgNum",
+        'notice' );
     $cfgNum = $row[0];
     $sth =
       $dbh->prepare( "select locationRules, globalStorage, "
           . "globalStorageOptions, exportedHeaders, portal "
-          . "from config where(cfgNum=$cfgNum)" );
+          . "from lmConfig where(cfgNum=$cfgNum)" );
     $sth->execute();
     @row = $sth->fetchrow_array;
     return {
@@ -138,7 +142,7 @@ stored configuration has changed and reload it if it has.
 
 =head1 DIAGRAM OF THE CONFIGURATION DATABASE
 
-  CREATE TABLE lemonconfig (
+  CREATE TABLE lmConfig (
     cfgNum int,
     locationRules text,
     globalStorage text,

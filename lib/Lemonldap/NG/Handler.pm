@@ -3,13 +3,10 @@ package Lemonldap::NG::Handler;
 use 5.008004;
 use strict;
 
-use Apache;
-use Apache::Log;
-use Apache::Constants qw(:common :response);
 use MIME::Base64;
 use Exporter 'import';
 
-our $VERSION = '0.11';
+our $VERSION = '0.3';
 
 our %EXPORT_TAGS = (
     localStorage => [
@@ -36,6 +33,10 @@ our %EXPORT_TAGS = (
     headers => [
         qw(
           $forgeHeaders
+          lmHeaderIn
+          lmSetHeaderIn
+          lmHeaderOut
+          lmSetHeaderOut
           )
     ],
     traces => [
@@ -43,12 +44,24 @@ our %EXPORT_TAGS = (
           $whatToTrace
           )
     ],
+    apache => [
+        qw(
+          MP
+          lmLog
+          OK
+          REDIRECT
+          FORBIDDEN
+          DONE
+          DECLINED
+          SERVER_ERROR
+          )
+    ],
 );
 
 our @EXPORT_OK = ();
 push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach (
     qw(
-    localStorage globalStorage locationRules import headers traces
+    localStorage globalStorage locationRules import headers traces apache
     )
 );
 $EXPORT_TAGS{all} = \@EXPORT_OK;
@@ -64,6 +77,138 @@ our (
     $localStorageOptions, $whatToTrace,          $https,
     $refLocalStorage,
 );
+
+##########################################
+# COMPATIBILITY WITH APACHE AND APACHE 2 #
+##########################################
+
+use mod_perl;
+
+BEGIN {
+    if ( exists $ENV{MOD_PERL} ) {
+        if ( $ENV{MOD_PERL_API_VERSION} >= 2 ) {
+            *MP = sub { 2 };
+        }
+        else {
+            *MP = sub { 1 };
+        }
+    }
+    else {
+        *MP = sub { 0 };
+    }
+    if ( MP() == 2 ) {
+
+        #eval{
+        #    use Apache2::RequestRec;
+        #    use Apache2::Log;
+        #    use Apache2::Const -compile => qw(:common :log FORBIDDEN);
+        #};
+        #die $@ if($@);
+        require Apache2::RequestRec;
+        Apache2::RequestRec->import();
+
+        #require Apache2::RequestIO;
+        require Apache2::Log;
+        require Apache2::Const;
+
+        #Apache2::Const->import('-compile', 'FORBIDDEN');
+        Apache2::Const->import( '-compile', qw(:common :log) );
+        *FORBIDDEN    = \&Apache2::Const::FORBIDDEN;
+        *REDIRECT     = \&Apache2::Const::REDIRECT;
+        *OK           = \&Apache2::Const::OK;
+        *DECLINED     = \&Apache2::Const::DECLINED;
+        *DONE         = \&Apache2::Const::DONE;
+        *SERVER_ERROR = \&Apache2::Const::SERVER_ERROR;
+        require Apache2::compat;
+        Apache2::compat->import();
+    }
+    else {
+        require Apache;
+        require Apache::Log;
+        require Apache::Constants;
+        Apache::Constants->import(':common');
+        Apache::Constants->import(':response');
+    }
+    *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
+}
+
+sub handler_mp1 ($$) { &run }
+
+sub handler_mp2 : method {
+    &run;
+}
+
+sub lmLog($$$) {
+    my ( $class, $mess, $level ) = @_;
+    if ( MP() == 2 ) {
+        Apache2::ServerRec->log->$level($mess);
+    }
+    else {
+        Apache->server->log->$level($mess);
+    }
+}
+
+sub regRemoteIp {
+    my ( $class, $str ) = @_;
+    if ( MP() == 2 ) {
+        $str =~
+          s/\$datas->\{ip\}/\$apacheRequest->connection->remote_addr->ip_get/g;
+    }
+    else {
+        $str =~ s/\$datas->\{ip\}/\$apacheRequest->connection->remote_ip/g;
+    }
+    return $str;
+}
+
+sub lmSetHeaderIn {
+    my ( $r, $h, $v ) = @_;
+    if ( MP() == 2 ) {
+        return $r->headers_in->set( $h => $v );
+    }
+    else {
+        return $r->header_in( $h => $v );
+    }
+}
+
+sub lmHeaderIn {
+    my ( $r, $h, $v ) = @_;
+    if ( MP() == 2 ) {
+        return $r->headers_in->{$h};
+    }
+    else {
+        return $r->header_in($h);
+    }
+}
+
+sub lmSetErrHeaderOut {
+    my ( $r, $h, $v ) = @_;
+    if ( MP() == 2 ) {
+        return $r->err_headers_out->set( $h => $v );
+    }
+    else {
+        return $r->header_out( $h => $v );
+    }
+}
+
+sub lmSetHeaderOut {
+    my ( $r, $h, $v ) = @_;
+    if ( MP() == 2 ) {
+        return $r->headers_out->set( $h => $v );
+    }
+    else {
+        return $r->header_out( $h => $v );
+    }
+}
+
+sub lmHeaderOut {
+    my ( $r, $h, $v ) = @_;
+    if ( MP() == 2 ) {
+        return $r->headers_out->{$h};
+    }
+    else {
+        return $r->header_out($h);
+    }
+}
 
 ##############################
 # Initialization subroutines #
@@ -89,26 +234,38 @@ sub localInit($$) {
 
         eval "use $localStorage;";
         die("Unable to load $localStorage") if ($@);
-	# At each Apache (re)start, we've to clear the cache to avoid living
-	# with old datas
-	eval '$refLocalStorage = new '
-	  . $localStorage
-	  . '($localStorageOptions);';
-	if ( defined $refLocalStorage ) {
-	    $refLocalStorage->clear();
-	}
-	else {
-	    Apache->server->log->error("Unable to clear local cache: $@");
-	}
-        # We don't initialise local storage in the "init" subroutine because it can
-        # be used at the starting of Apache and so with the "root" privileges. Local
-        # Storage is also initialized just after Apache's fork and privilege lost.
-	no strict;
-	Apache->push_handlers( PerlChildInitHandler => sub { return $class->initLocalStorage(@_); } );
-    
-        # Local storage is cleaned after giving the content of the page to increase
-        # performances.
-        Apache->push_handlers( PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); } );
+
+        # At each Apache (re)start, we've to clear the cache to avoid living
+        # with old datas
+        eval '$refLocalStorage = new '
+          . $localStorage
+          . '($localStorageOptions);';
+        if ( defined $refLocalStorage ) {
+            $refLocalStorage->clear();
+        }
+        else {
+            $class->lmLog( "Unable to clear local cache: $@", 'error' );
+        }
+
+    # We don't initialise local storage in the "init" subroutine because it can
+    # be used at the starting of Apache and so with the "root" privileges. Local
+    # Storage is also initialized just after Apache's fork and privilege lost.
+        no strict;
+
+     # Local storage is cleaned after giving the content of the page to increase
+     # performances.
+        if ( MP() == 2 ) {
+            Apache->push_handlers( PerlChildInitHandler =>
+                  sub { $class->initLocalStorage( $_[1], $_[0] ) } );
+            Apache->push_handlers(
+                PerlCleanupHandler => sub { $class->cleanLocalStorage(@_) } );
+        }
+        else {
+            Apache->push_handlers(
+                PerlChildInitHandler => sub { $class->initLocalStorage(@_) } );
+            Apache->push_handlers(
+                PerlCleanupHandler => sub { $class->cleanLocalStorage(@_) } );
+        }
     }
 }
 
@@ -208,19 +365,18 @@ sub forgeHeadersInit {
     }
     foreach ( keys %tmp ) {
         $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-        $tmp{$_} =~ s/\$datas->\{ip\}/\$apacheRequest->connection->remote_ip/g;
+        $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
     }
 
     my $sub;
     foreach ( keys %tmp ) {
         $sub .=
-          "\$apacheRequest->header_in('$_' => join('',split(/[\\r\\n]+/,"
+          "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
           . $tmp{$_} . ")));";
     }
     $sub = "\$forgeHeaders = sub {$sub};";
     eval "$sub";
-    Apache->server->log->error(
-        __PACKAGE__ . ": Unable to forge headers: $@ $sub" )
+    $class->lmLog( "$class: Unable to forge headers: $@ $sub", 'error' )
       if ($@);
 }
 
@@ -240,20 +396,24 @@ sub grant {
 
 # forbidden : used to reject non authorizated requests
 sub forbidden {
+    my $class = shift;
 
     # We use Apache::Log here
-    $apacheRequest->log->notice( 'The user "'
+    $class->lmLog(
+        'The user "'
           . $datas->{$whatToTrace}
           . '" was reject when he tried to access to '
-          . $_[1] );
+          . $_[1],
+        'notice'
+    );
     return FORBIDDEN;
 }
 
 # hideCookie : hide Lemonldap cookie to the protected application
 sub hideCookie {
-    my $tmp = $apacheRequest->header_in('Cookie');
+    my $tmp = lmHeaderIn( $apacheRequest, 'Cookie' );
     $tmp =~ s/$cookieName[^;]*;?//o;
-    $apacheRequest->header_in( 'Cookie', $tmp );
+    lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
 }
 
 # Redirect non-authenticated users to the portal
@@ -265,15 +425,23 @@ sub goToPortal() {
           . $apacheRequest->get_server_name()
           . $url );
     $urlc_init =~ s/[\n\s]//g;
-    $apacheRequest->header_out( location => "$portal?url=$urlc_init" );
-    $apacheRequest->log->debug( "Redirect "
+    $class->lmLog(
+        "Redirect "
           . $apacheRequest->connection->remote_ip
-          . " to portal (url was $url)" );
+          . " to portal (url was $url)",
+        'debug'
+    );
+    print STDERR "DEBUG a enlever\n";
+    use Data::Dumper;
+    print STDERR Dumper($portal);
+    $apacheRequest->headers_out->set( 'Location' => "$portal?url=$urlc_init" );
+
+    #lmSetErrHeaderOut($apacheRequest, Location => "$portal?url=$urlc_init" );
     return REDIRECT;
 }
 
 # MAIN SUBROUTINE called by Apache (using PerlInitHandler option)
-sub handler ($$) {
+sub run ($$) {
     my $class;
     ( $class, $apacheRequest ) = @_;
 
@@ -285,10 +453,10 @@ sub handler ($$) {
     # I - recover the cookie
     my $id;
     unless ( ($id) =
-        ( $apacheRequest->header_in('Cookie') =~ /$cookieName=([^; ]+);?/o ) )
+        ( lmHeaderIn( $apacheRequest, 'Cookie' ) =~ /$cookieName=([^; ]+);?/o )
+      )
     {
-        Apache->server->log->info(
-            "No cookie found" . $apacheRequest->header_in('Cookie') );
+        $class->lmLog( "$class: No cookie found", 'info' );
         return $class->goToPortal($uri);
     }
 
@@ -306,8 +474,8 @@ sub handler ($$) {
             if ($@) {
 
                 # The cookie isn't yet available
-                Apache->server->log->info(
-                    "The cookie $id isn't yet available: $@");
+                $class->lmLog( "The cookie $id isn't yet available: $@",
+                    'info' );
                 return $class->goToPortal($uri);
             }
             $datas->{$_} = $h{$_} foreach ( keys %h );
@@ -322,9 +490,12 @@ sub handler ($$) {
 
     # AUTHORIZATION
     return $class->forbidden($uri) unless ( $class->grant($uri) );
-    Apache->server->log->debug( "User "
+    $class->lmLog(
+        "User "
           . $datas->{$whatToTrace}
-          . " was authorizated to access to $uri" );
+          . " was authorizated to access to $uri",
+        'debug'
+    );
 
     # ACCOUNTING
     # 1 - Inform Apache
@@ -344,13 +515,13 @@ sub sendHeaders {
 }
 
 sub initLocalStorage {
-    my($class,$r) = @_;
+    my ( $class, $r ) = @_;
     if ( $localStorage and not $refLocalStorage ) {
         eval '$refLocalStorage = new '
           . $localStorage
           . '($localStorageOptions);';
     }
-    $r->log_error("Local cache initialization failed: $@")
+    $class->lmLog( "Local cache initialization failed: $@", 'error' )
       unless ( defined $refLocalStorage );
     return DECLINED;
 }

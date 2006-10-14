@@ -27,5 +27,13 @@ Revision history for Perl extension Lemonldap::NG::Handler.
 0.1   Thu Oct 5 19:00:00 2006
 	- new package: Lemonldap::NG::Handler::SharedConf::DBI including
 	a complete shared system based on a shared DB
-0.11   Fri Oct 6 17:24:00 2006
+
+0.11  Fri Oct 6 17:24:00 2006
 	- bugs corrections
+
+0.2   Mon Oct 9 17:32:20 2006
+	- Introducing Apache2 support
+
+0.3   Sat Oct 14 14:54:56 2006
+	- Bug correction in both Apache 1 and 2 support
+

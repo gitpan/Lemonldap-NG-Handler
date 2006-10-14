@@ -14,7 +14,13 @@ DEPENDENCIES
 
 This module requires these other modules and libraries:
 
-  Apache::Session, LWP::UserAgent
+  Apache::Session, LWP::UserAgent, 'Cache::Cache', 'MIME::Base64',
+  'DBI'
+
+and of course mod_perl1 or mod_perl2.
+
+Lemonldap::NG is known to not work with mod_perl 1.99 (used in Debian
+Sarge). Use Apache-1.3 instead.
 
 COPYRIGHT AND LICENCE
 
