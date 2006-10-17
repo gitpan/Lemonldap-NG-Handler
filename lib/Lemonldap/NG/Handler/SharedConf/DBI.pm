@@ -9,12 +9,12 @@ use Storable qw(thaw);
 use MIME::Base64;
 
 BEGIN {
-    if ( MP() == 2 ) {
-        Apache2::compat->import();
+    if (MP() == 2) {
+	Apache2::compat->import();
     }
 }
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -26,11 +26,10 @@ our ( $dbiChain, $dbiUser, $dbiPassword );
 my ( $dbh, $cfgNum ) = ( undef, 0 );
 
 sub localInit($$) {
-    my ( $class, $args ) = @_;
+    my($class,$args) = @_;
     $dbiChain = $args->{dbiChain} or die "No dbiChain found";
-    $dbiUser = $args->{dbiUser} or $class->lmLog( "No dbiUser found", 'warn' );
-    $dbiPassword = $args->{dbiPassword}
-      or $class->lmLog( "No dbiPassword found", 'warn' );
+    $dbiUser = $args->{dbiUser} or $class->lmLog("No dbiUser found", 'warn');
+    $dbiPassword = $args->{dbiPassword} or $class->lmLog("No dbiPassword found",'warn');
     $class->SUPER::localInit($args);
 }
 
@@ -44,9 +43,7 @@ sub getConf {
         $class->lmLog( "$class: getConf: No configuration found", 'error' );
         return undef;
     }
-    $class->lmLog(
-        "$class: configuration found: " . $row[0] . ", previous was: $cfgNum",
-        'notice' );
+    $class->lmLog( "$class: configuration found: " . $row[0] . ", previous was: $cfgNum", 'notice' );
     $cfgNum = $row[0];
     $sth =
       $dbh->prepare( "select locationRules, globalStorage, "

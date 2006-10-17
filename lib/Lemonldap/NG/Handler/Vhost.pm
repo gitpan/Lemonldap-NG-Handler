@@ -40,20 +40,17 @@ sub forgeHeadersInit {
         my %tmp = %{ $args->{exportedHeaders}->{$vhost} };
         foreach ( keys %tmp ) {
             $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-            $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
+	    $tmp{$_} = $class->regRemoteIp($tmp{$_});
         }
 
         my $sub;
         foreach ( keys %tmp ) {
             $sub .=
-              "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
-              . $tmp{$_} . ")));";
+              "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
         }
         $sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
         eval "$sub";
-        $class->lmLog( "$class: Unable to forge headers: $@ $sub",
-            'error' )
-          if ($@);
+        $class->lmLog( __PACKAGE__ . ": Unable to forge headers: $@ $sub", 'error' ) if ($@);
     }
 }
 
@@ -78,10 +75,7 @@ sub grant {
         }
     }
     unless ( $defaultCondition->{$vhost} ) {
-        $class->lmLog(
-            "User rejected because VirtualHost \"$vhost\" has no configuration",
-            'warn'
-        );
+        $class->lmLog( "User rejected because VirtualHost \"$vhost\" has no configuration", 'warn');
     }
     return &{ $defaultCondition->{$vhost} };
 }

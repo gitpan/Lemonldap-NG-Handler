@@ -6,7 +6,7 @@ use warnings;
 use Lemonldap::NG::Handler qw(:apache);
 use LWP::UserAgent;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
@@ -15,22 +15,14 @@ our $VERSION = '0.1';
 use mod_perl;
 
 BEGIN {
-    if ( MP() == 2 ) {
-        Apache2::Const->import( -compile => [ ':common', ':response' ] );
+    if (MP() == 2) {
         Apache2::compat->import();
-    }
-    else {
-        Apache::Constants->import(':common');
-        Apache::Constants->import(':response');
     }
     *handler = MP() ? \&handler_mp2 : \&handler_mp1;
 }
 
-sub handler_mp1 ($$) { &run(@_) }
-
-sub handler_mp2 : method {
-    &run(@_);
-}
+sub handler_mp1 ($$)     { &run(@_) }
+sub handler_mp2 : method { &run(@_) }
 
 ########
 # MAIN #
@@ -49,7 +41,7 @@ our $class;
 $UA->requests_redirectable( [] );
 
 sub run($$) {
-    ( $class, $r ) = @_;
+    ($class,$r) = @_;
     my $url = $r->uri;
     $url .= "?" . $r->args if ( $r->args );
     return DECLINED unless ( $base = $r->dir_config('LmProxyPass') );
@@ -61,10 +53,9 @@ sub run($$) {
             $_[1] =~ s/lemon=[^;]*;?// if ( $_[0] =~ /Cookie/i );
             return 1 if ( $_[1] =~ /^$/ );
             $request->header(@_) unless ( $_[0] =~ /^(Host|Referer)$/i );
-            $class->lmLog(
-                "$class: header pushed to the server: " . $_[0] . ": " . $_[1],
-                'debug'
-            );
+            $class->lmLog( "$class: header pushed to the server: "
+                  . $_[0] . ": "
+                  . $_[1], 'debug' );
             1;
         }
     );
@@ -99,7 +90,8 @@ sub cb_content {
 sub headers {
     $class = shift;
     my $response = shift;
-    $r->content_type( $response->header('Content-Type') );
+    my $tmp = $response->header('Content-Type');
+    $r->content_type( $tmp ) if( $tmp );
     $r->status( $response->code );
     $r->status_line( join ' ', $response->code, $response->message );
 
@@ -113,10 +105,7 @@ sub headers {
             $_[1] =~ s#$location_old#$location_new#oe
               if ( $location_old and $location_new and $_[0] =~ /Location/i );
             $r->header_out(@_);
-            $class->lmLog(
-                "$class: header pushed to the client: " . $_[0] . ": " . $_[1],
-                'debug'
-            );
+            $class->lmLog( "$class: header pushed to the client: " . $_[0] . ": " . $_[1], 'debug' );
             1;
         }
     );
