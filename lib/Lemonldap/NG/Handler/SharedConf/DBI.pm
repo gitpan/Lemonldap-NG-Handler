@@ -14,7 +14,7 @@ BEGIN {
     }
 }
 
-our $VERSION = '0.1';
+our $VERSION = '0.4';
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
 

@@ -4,7 +4,7 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 WriteMakefile(
     NAME              => 'Lemonldap::NG::Handler',
-    VERSION           => '0.6', # finds $VERSION
+    VERSION           => '0.61', # finds $VERSION
     PREREQ_PM         => {
 		'Apache::Constants' => 0,
 		'Apache::Session'   => 0,

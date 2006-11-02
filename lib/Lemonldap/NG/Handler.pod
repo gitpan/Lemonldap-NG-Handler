@@ -126,12 +126,12 @@ L<Lemonldap::NG::SharedConf>, see L<Lemonldap::NG::Manager>):
   locationRules => {
       www1.domain.com => {
           '^/protected/.*$' => '$groups =~ /\bgroup1\b/',
-	  default           => 'accept',
+          default           => 'accept',
       },
       www2.domain.com => {
           '^/site/.*$' => '$uid eq "xavier.guimard" or $groups =~ /\bgroup2\b/',
-	  '^/(js|css)' => 'accept',
-	  default      => 'deny',
+          '^/(js|css)' => 'accept',
+          default      => 'deny',
       },
   },
 
@@ -146,13 +146,13 @@ You have to be careful when choosing your expressions:
 
 =over
 
-=item * C<groupRules> are evaluated each time a user is redirected to the portal,
+=item * C<groups> are evaluated each time a user is redirected to the portal,
 
 =item * C<locationRules> are evaluated for each request.
 
 =back
 
-It is also recommanded to use the group mechanism to avoid having to
+It is also recommanded to use the C<groups> mechanism to avoid having to
 evaluate a long expression at each HTTP request:
 
   locationRules => {
@@ -161,8 +161,8 @@ evaluate a long expression at each HTTP request:
       },
   },
 
-You can also use ldap filters in C<groupRules> parameter, or Perl expression or
-mixed expressions. Perl expressions has to be enclosed with {}:
+You can also use ldap filters in C<groups> parameter, or Perl expression or
+mixed expressions. Perl expressions has to be enclosed with C<{}>:
 
 =over
 
@@ -214,7 +214,7 @@ Example:
   exportedHeaders => {
       www1.domain.com => {
           'Auth-User' => '$uid',
-	  'Unit'      => '$ou',
+          'Unit'      => '$ou',
       },
       www2.domain.com => {
           'Authorization' => '"Basic ".encode_base64($employeeNumber.":dummy")',
@@ -228,7 +228,7 @@ Lemonldap::NG use 3 levels of cache for authenticated users:
 =over
 
 =item * an Apache::Session::* module choosed with the C<globalStorage>
-parameter (completed with C<globalstorageOptions>) and used by
+parameter (completed with C<globalStorageOptions>) and used by
 L<lemonldap::NG::Portal> to store authenticated user parameters,
 
 =item * a L<Cache::Cache> module choosed with the C<localStorage> parameter
