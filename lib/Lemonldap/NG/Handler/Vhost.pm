@@ -1,10 +1,10 @@
 package Lemonldap::NG::Handler::Vhost;
 
-use Lemonldap::NG::Handler qw(:locationRules :headers);
+use Lemonldap::NG::Handler::Simple qw(:locationRules :headers);
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
@@ -40,7 +40,7 @@ sub forgeHeadersInit {
         my %tmp = %{ $args->{exportedHeaders}->{$vhost} };
         foreach ( keys %tmp ) {
             $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-	    $tmp{$_} = $class->regRemoteIp($tmp{$_});
+	    $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
         }
 
         my $sub;
@@ -50,7 +50,7 @@ sub forgeHeadersInit {
         }
         $sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
         eval "$sub";
-        $class->lmLog( __PACKAGE__ . ": Unable to forge headers: $@ $sub", 'error' ) if ($@);
+        $class->lmLog( "$class: Unable to forge headers: $@ $sub", 'error' ) if ($@);
     }
 }
 
@@ -86,8 +86,8 @@ __END__
 
 =head1 NAME
 
-Lemonldap::NG::Handler::Vhost - Perl extension for building a Lemonldap compatible
-handler able to manage Apache virtual hosts.
+Lemonldap::NG::Handler::Vhost - Perl extension for building a Lemonldap::NG
+compatible handler able to manage Apache virtual hosts.
 
 =head1 SYNOPSIS
 
@@ -97,7 +97,7 @@ Create your own package:
   use Lemonldap::NG::Handler::Vhost;
   
   # IMPORTANT ORDER
-  our @ISA = qw (Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler);
+  our @ISA = qw (Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
   
   __PACKAGE__->init ( { locationRules => {
              'vhost1.dc.com' => {
@@ -109,47 +109,9 @@ Create your own package:
 		 '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
                  default          => 'accept',
 	     },
-	     # Put here others Lemonldap::NG::Handler options
+	     # Put here others Lemonldap::NG::Handler::Simple options
 	   }
 	 );
-
-Other example, using L<Lemonldap::NG::Handler::SharedConf>
-
-  package My::Package;
-  use Lemonldap::NG::Handler::SharedConf;
-  use Lemonldap::NG::Handler::Vhost;
-  
-  # IMPORTANT ORDER
-  # our @ISA = qw (Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::SharedConf);
-  
-  __PACKAGE__->init ... # as using Lemonldap::NG::Handler::SharedConf alone
-
-Change configuration
-
-  __PACKAGE__->setConf ( {
-               locationRules => {
-                 'vhost1.dc.com' => {
-	           'default' => '$ou =~ /brh/'
-                 },
-	         'vhost2.dc.com' => {
-	           '^/pj/.*$'       => q($qualif="opj"),
-		   '^/rh/.*$'       => q($ou=~/brh/),
-		   '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
-                   default          => 'accept',
-	         },
-	       },
-	       exportedHeaders => {
-	         'vhost1.dc.com' => {
-	          'Authorization'=>'"Basic ".MIME::Base64::encode_base64($uid)',
-		  'User-Auth'    => '$uid',
-		 },
-		 'vhost2.dc.com' => {
-		   'User-Auth'   => '$uid',
-		 },
-               }
-	       # Put here others Lemonldap::NG::Handler::SharedConf options
-	     }
-	   );
 
 Call your package in <apache-directory>/conf/httpd.conf
 
@@ -158,16 +120,13 @@ Call your package in <apache-directory>/conf/httpd.conf
 
 =head1 DESCRIPTION
 
-Lemonldap is a simple Web-SSO based on Apache::Session modules. It simplifies
-the build of a protected area with a few changes in the application (they just
-
-This library provides a way to protect Apache virtual hosts with Lemonldap.
+This library provides a way to protect Apache virtual hosts with Lemonldap::NG.
 
 =head2 INITIALISATION PARAMETERS
 
 Lemonldap::NG::Handler::Vhost splits the locationRules parameter into a hash
 reference which contains anonymous hash references as used by
-L<Lemonldap::NG::Handler>.
+L<Lemonldap::NG::Handler::Simple>.
 
 =head1 SEE ALSO
 
@@ -184,10 +143,5 @@ Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
 at your option, any later version of Perl 5 you may have available.
-
-Lemonldap was originaly written by Eric german who decided to publish him in
-2003 under the terms of the GNU General Public License version 2.
-Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
-policies in a same Apache virtual host.
 
 =cut

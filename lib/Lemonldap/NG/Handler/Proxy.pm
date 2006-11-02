@@ -3,10 +3,10 @@ package Lemonldap::NG::Handler::Proxy;
 use strict;
 use warnings;
 
-use Lemonldap::NG::Handler qw(:apache);
+use Lemonldap::NG::Handler::Simple qw(:apache :headers);
 use LWP::UserAgent;
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
@@ -92,6 +92,8 @@ sub headers {
     my $response = shift;
     my $tmp = $response->header('Content-Type');
     $r->content_type( $tmp ) if( $tmp );
+    # Modif demandée par mail
+    #$r->content_type( $response->header('Content-Type') );
     $r->status( $response->code );
     $r->status_line( join ' ', $response->code, $response->message );
 
@@ -102,9 +104,9 @@ sub headers {
         sub {
 
             # Replace Location headers
-            $_[1] =~ s#$location_old#$location_new#oe
+            $_[1] =~ s#$location_old#$location_new#
               if ( $location_old and $location_new and $_[0] =~ /Location/i );
-            $r->header_out(@_);
+	    lmSetErrHeaderOut($r,@_);
             $class->lmLog( "$class: header pushed to the client: " . $_[0] . ": " . $_[1], 'debug' );
             1;
         }
@@ -120,7 +122,7 @@ __END__
 =head1 NAME
 
 Lemonldap::NG::Handler::Proxy - Perl extension to add a reverse-proxy to a
-Lemonldap handler.
+Lemonldap::NG handler.
 
 =head1 SYNOPSIS
 
@@ -142,24 +144,6 @@ apache/conf/httpd.conf:
   </Location>
 
 =head1 DESCRIPTION
-
-Lemonldap is a simple Web-SSO based on Apache::Session modules. It simplifies
-the build of a protected area with a few changes in the application (they just
-have to read some headers for accounting).
-
-It manages both authentication and authorization and provides headers for
-accounting. So you can have a full AAA protection for your web space. There are
-two ways to build a cross domain authentication:
-
-=over
-
-=item * Cross domain authentication itself (Lemonldap::Portal::Cda) I<(not yet
-implemented in Lemonldap::NG)>
-
-=item * "Liberty Alliance" (see L<Lemonldap::NG::ServiceProvider> and
-L<Lemonldap::NG::IdentityProvider>)
-
-=back
 
 This library adds a reverse-proxy functionnality to Apache. It is useful to
 manage redirections if the remote host use it without the good domain.
@@ -192,10 +176,5 @@ Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
 at your option, any later version of Perl 5 you may have available.
-
-Lemonldap was originaly written by Eric german who decided to publish him in
-2003 under the terms of the GNU General Public License version 2.
-Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
-policies in a same Apache virtual host.
 
 =cut

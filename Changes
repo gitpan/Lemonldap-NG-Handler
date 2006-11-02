@@ -1,5 +1,11 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.6   Fri Nov 2 15:16:56 2006
+	- Bug correction in Proxy.pm
+	- New documentation
+	- Handler.pm becomes Handler/Simple.pm
+	- Tested with 40.000 users
+
 0.5   Tue Oct 17 15:35:28 2006
 	- Bug correction in Proxy.pm
 	- First running release under Apache2

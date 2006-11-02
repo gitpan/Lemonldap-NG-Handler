@@ -4,20 +4,20 @@ use 5.008004;
 use strict;
 use warnings;
 
-use Lemonldap::NG::Handler qw(:all);
+use Lemonldap::NG::Handler::Simple qw(:all);
 use Lemonldap::NG::Handler::Vhost;
 use Cache::Cache qw($EXPIRES_NEVER);
 
-our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler);
+our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.2';
+our $VERSION    = '0.3';
 our $cfgNum    = 0;
 our $lastReload = 0;
 our $reloadTime;
 our $childLock = 0;
 
-*EXPORT_TAGS = *Lemonldap::NG::Handler::EXPORT_TAGS;
-*EXPORT_OK   = *Lemonldap::NG::Handler::EXPORT_OK;
+*EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
+*EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
 
 BEGIN {
     if (MP() == 2) {
@@ -125,9 +125,7 @@ __END__
 =head1 NAME
 
 Lemonldap::NG::Handler::SharedConf - Perl extension for adding dynamic
-configuration to Lemonldap::NG::Handler. To use for inheritance.
-
-See L<Lemonldap::NG::Handler::SharedConf::DBI> for a complete example.
+configuration to Lemonldap::NG::Handler::Simple. To use for inheritance.
 
 =head1 SYNOPSIS
 
@@ -147,7 +145,7 @@ See L<Lemonldap::NG::Handler::SharedConf::DBI> for a complete example.
     #  }
     #  portal               => 'https://portal/',
     # }
-    # See L<Lemonldap::NG::Handler> for more
+    # See L<Lemonldap::NG::Handler::Simple> for more
   }
   
   __PACKAGE__->init ( {
@@ -169,25 +167,19 @@ configuration reload, so you don't need to restart Apache at each change :
 
 =head1 DESCRIPTION
 
-Lemonldap is a simple Web-SSO based on Apache::Session modules. It simplifies
-the build of a protected area with a few changes in the application (they just
-have to read some headers for accounting).
-
-It manages both authentication and authorization and provides headers for
-accounting. So you can have a full AAA protection for your web space.
-
-This library splits L<Lemonldap::NG::Handler> initialization into 2 phases:
-local initialization and global configuration set. It can be used if you want
-to write a module that can change its global configuration without restarting
-Apache.
+This library splits L<Lemonldap::NG::Handler::Simple> initialization into 2
+phases: local initialization and global configuration set. It can be used if
+you want to write a module that can change its global configuration without
+restarting Apache and that use a central configuration storage (like DBI,
+see L<Lemonldap::NG::SharedConf::DBI>).
 
 =head2 OVERLOADED SUBROUTINES
 
 =head3 init
 
-Like L<Lemonldap::NG::Handler>::init() but read only localStorage related options.
-You may change default time between two configuration checks with the
-C<reloadTime> parameter (default 600s).
+Like L<Lemonldap::NG::Handler::Simple>::init() but read only localStorage
+related options. You may change default time between two configuration checks
+with the C<reloadTime> parameter (default 600s).
 
 =head2 SUBROUTINE TO WRITE
 
@@ -198,7 +190,7 @@ download system.
 
 =head2 EXPORT
 
-Same as L<Lemonldap::NG::Handler>.
+Same as L<Lemonldap::NG::Handler::Simple>.
 
 =head1 OPERATION
 
@@ -230,10 +222,5 @@ Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
 at your option, any later version of Perl 5 you may have available.
-
-Lemonldap was originaly written by Eric german who decided to publish him in
-2003 under the terms of the GNU General Public License version 2.
-Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
-policies in a same Apache virtual host.
 
 =cut

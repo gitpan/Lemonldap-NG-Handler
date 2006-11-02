@@ -14,7 +14,7 @@ BEGIN {
     }
 }
 
-our $VERSION = '0.3';
+our $VERSION = '0.1';
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -75,12 +75,15 @@ configuration using DBI.
   @ISA = qw(Lemonldap::NG::Handler::SharedConf::DBI);
   
   __PACKAGE__->init ( {
-    localStorage        => "Cache::DBFile",
-    localStorageOptions => {},
+    localStorage        => "Cache::FileCache",
+    localStorageOptions => {
+        'namespace' => 'MyNamespace',
+        'default_expires_in' => 600,
+      },
     reloadTime          => 1200, # Default: 600
     dbiChain            => "DBI:mysql:database=$database;host=$hostname;port=$port",
     dbiUser             => "lemonldap",
-    dbiassword          => "password",
+    dbiPassword          => "password",
   } );
 
 Call your package in /apache-dir/conf/httpd.conf :
@@ -101,17 +104,10 @@ configuration reload, so you don't need to restart Apache at each change :
     Order deny,allow
     Deny from all
     Allow from my.manager.com
-    PerlInitHandler My::Package::refresh
+    PerlInitHandler My::Package->refresh
   </Location>
 
 =head1 DESCRIPTION
-
-Lemonldap::NG is a simple Web-SSO based on Apache::Session modules. It
-simplifies the build of a protected area with a few changes in the application
-(they just have to read some headers for accounting).
-
-It manages both authentication and authorization and provides headers for
-accounting. So you can have a full AAA protection for your web space.
 
 This library inherit from L<Lemonldap::NG::Handler::SharedConf> to build a
 complete SSO Handler System: a central database contains the policy of your
@@ -131,13 +127,13 @@ Same as L<Lemonldap::NG::Handler::SharedConf>.
 =head1 OPERATION
 
 Each new Apache child checks if there's a configuration stored in the local
-store. If not, it calls getConf to get one and store it in the local store by
+store. If not, it calls C<getConf> to get one and store it in the local store by
 calling setconf.
 
 Every 600 seconds (or $reload seconds), each Apache child checks if the local
 stored configuration has changed and reload it if it has.
 
-=head1 DIAGRAM OF THE CONFIGURATION DATABASE
+=head1 SCHEME OF THE CONFIGURATION DATABASE
 
   CREATE TABLE lmConfig (
     cfgNum int,
@@ -146,6 +142,16 @@ stored configuration has changed and reload it if it has.
     globalStorageOptions text,
     exportedHeaders text,
     portal text,
+    domain text,
+    ldapServer text,
+    ldapPort int,
+    ldapBase text,
+    securedCookie int,
+    cookiename text,
+    authentication text,
+    exportedvars text,
+    managerDn text,
+    managerPassword text,
     PRIMARY KEY (cfgNum)
     );
 
@@ -182,11 +188,6 @@ Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
 at your option, any later version of Perl 5 you may have available.
-
-Lemonldap was originaly written by Eric german who decided to publish him in
-2003 under the terms of the GNU General Public License version 2.
-Lemonldap::NG is a complete rewrite of Lemonldap and is able to have different
-policies in a same Apache virtual host.
 
 =cut
 
