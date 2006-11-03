@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Lemonldap-NG-Handler
-version:      0.61
+version:      0.62
 version_from: 
 installdirs:  site
 requires:
@@ -12,6 +12,7 @@ requires:
     Exporter:                      0
     LWP::UserAgent:                0
     MIME::Base64:                  0
+    mod_perl:                      0
 
 distribution_type: module
 generated_by: ExtUtils::MakeMaker version 6.30_01

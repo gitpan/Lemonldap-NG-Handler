@@ -112,8 +112,7 @@ configuration database):
       login         => "uid",
   },
 
-User groups (stored in configuration database with
-L<Lemonldap::NG::SharedConf>, see L<Lemonldap::NG::Manager>):
+User groups (stored in configuration database with L<Lemonldap::NG::Manager>):
 
   groupRules => {
       group1 => '{ $departmentUID eq "unit1" or $login = "xavier.guimard" }',
@@ -121,7 +120,7 @@ L<Lemonldap::NG::SharedConf>, see L<Lemonldap::NG::Manager>):
   },
 
 Area protection (stored in configuration database with
-L<Lemonldap::NG::SharedConf>, see L<Lemonldap::NG::Manager>):
+L<Lemonldap::NG::Manager>):
 
   locationRules => {
       www1.domain.com => {
@@ -166,11 +165,11 @@ mixed expressions. Perl expressions has to be enclosed with C<{}>:
 
 =over
 
-=item * group1 => '(|(uid=xavier.guimard)(ou=unit1))'
+=item * C<group1 =E<gt> '(|(uid=xavier.guimard)(ou=unit1))'>
 
-=item * group1 => '{$uid eq "xavier.guimard" or $ou eq "unit1"}'
+=item * C<group1 =E<gt> '{$uid eq "xavier.guimard" or $ou eq "unit1"}'>
 
-=item * group1 => '(|(uid=xavier.guimard){$ou eq "unit1"})'
+=item * C<group1 =E<gt> '(|(uid=xavier.guimard){$ou eq "unit1"})'>
 
 =back
 

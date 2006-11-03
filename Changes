@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.62  Fri Nov 3 8:08:37 2006
+	- correction in documentation
+	- add mod_perl in PREREQ_PM (CPAN tester failed)
+
 0.61  Thu Nov 2 16:53:03 2006
 	- little correction in documentaion
 	- wrong version number in Handler/SharedConf/DBI.pm
