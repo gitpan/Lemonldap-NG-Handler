@@ -83,8 +83,6 @@ our (
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
 ##########################################
 
-use mod_perl;
-
 BEGIN {
     if( exists $ENV{MOD_PERL} ) {
         if( $ENV{MOD_PERL_API_VERSION} >= 2 ) {
@@ -129,14 +127,24 @@ BEGIN {
 	threads::shared::share($https);
 	threads::shared::share($refLocalStorage);
     }
-    else {
+    elsif (MP()==1) {
         require Apache;
         require Apache::Log;
         require Apache::Constants;
         Apache::Constants->import(':common');
 	Apache::Constants->import(':response');
     }
-    *handler = MP() ? \&handler_mp2 : \&handler_mp1;
+    else { # For Test
+	eval '
+            sub FORBIDDEN {1}
+            sub REDIRECT {1}
+            sub OK {1}
+            sub DECLINED {1}
+            sub DONE {1}
+            sub SERVER_ERROR {1}
+	';
+    }
+    *handler = (MP()==2) ? \&handler_mp2 : \&handler_mp1;
 }
 
 sub handler_mp1 ($$)     { shift->run(@_) }
@@ -503,6 +511,10 @@ sub initLocalStorage {
 sub cleanLocalStorage {
     $refLocalStorage->purge() if ($refLocalStorage);
     return DECLINED;
+}
+
+sub none {
+    DONE;
 }
 
 1;

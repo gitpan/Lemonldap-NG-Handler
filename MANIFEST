@@ -2,7 +2,7 @@ Changes
 Makefile.PL
 MANIFEST
 README
-lib/Lemonldap/NG/Handler.pod
+lib/Lemonldap/NG/Handler.pm
 lib/Lemonldap/NG/Handler/Simple.pm
 lib/Lemonldap/NG/Handler/Proxy.pm
 lib/Lemonldap/NG/Handler/Vhost.pm

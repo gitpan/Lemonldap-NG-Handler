@@ -4,7 +4,7 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 WriteMakefile(
     NAME              => 'Lemonldap::NG::Handler',
-    VERSION           => '0.62', # finds $VERSION
+    VERSION_FROM      => 'lib/Lemonldap/NG/Handler.pm',
     PREREQ_PM         => {
 		'Apache::Constants' => 0,
 		'Apache::Session'   => 0,
@@ -13,9 +13,8 @@ WriteMakefile(
 		'MIME::Base64'      => 0,
 		'DBI'               => 0,
 		'Exporter'          => 0,
-		'mod_perl'          => 0,
 		}, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
-      (ABSTRACT_FROM  => 'lib/Lemonldap/NG/Handler.pod', # retrieve abstract from module
+      (ABSTRACT_FROM  => 'lib/Lemonldap/NG/Handler.pm', # retrieve abstract from module
        AUTHOR         => 'x.guimard <x.guimard@free.fr>') : ()),
 );

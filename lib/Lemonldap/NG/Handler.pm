@@ -1,3 +1,11 @@
+package Lemonldap::NG::Handler;
+
+print STDERR "See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
+our $VERSION="0.621";
+
+1;
+
+__END__
 =pod
 
 =head1 NAME
@@ -114,7 +122,7 @@ configuration database):
 
 User groups (stored in configuration database with L<Lemonldap::NG::Manager>):
 
-  groupRules => {
+  groups => {
       group1 => '{ $departmentUID eq "unit1" or $login = "xavier.guimard" }',
       ...
   },
