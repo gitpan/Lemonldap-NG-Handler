@@ -1,7 +1,6 @@
 package Lemonldap::NG::Handler::Proxy;
 
 use strict;
-use warnings;
 
 use Lemonldap::NG::Handler::Simple qw(:apache :headers);
 use LWP::UserAgent;
@@ -12,17 +11,18 @@ our $VERSION = '0.3';
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
 ##########################################
 
-use mod_perl;
-
 BEGIN {
-    if (MP() == 2) {
+    if ( MP() == 2 ) {
         Apache2::compat->import();
     }
-    *handler = MP() ? \&handler_mp2 : \&handler_mp1;
+    *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
 }
 
-sub handler_mp1 ($$)     { &run(@_) }
-sub handler_mp2 : method { &run(@_) }
+sub handler_mp1 ($$) { &run(@_) }
+
+sub handler_mp2 : method {
+    &run(@_);
+}
 
 ########
 # MAIN #
@@ -41,7 +41,7 @@ our $class;
 $UA->requests_redirectable( [] );
 
 sub run($$) {
-    ($class,$r) = @_;
+    ( $class, $r ) = @_;
     my $url = $r->uri;
     $url .= "?" . $r->args if ( $r->args );
     return DECLINED unless ( $base = $r->dir_config('LmProxyPass') );
@@ -53,9 +53,7 @@ sub run($$) {
             $_[1] =~ s/lemon=[^;]*;?// if ( $_[0] =~ /Cookie/i );
             return 1 if ( $_[1] =~ /^$/ );
             $request->header(@_) unless ( $_[0] =~ /^(Host|Referer)$/i );
-            $class->lmLog( "$class: header pushed to the server: "
-                  . $_[0] . ": "
-                  . $_[1], 'debug' );
+            $class->lmLog( "$class: header pushed to the server: " . $_[0] . ": " . $_[1], 'debug' );
             1;
         }
     );
@@ -70,6 +68,8 @@ sub run($$) {
         $request->content($buf);
     }
     $headers_set = 0;
+
+    # For performance, we use a callback. See LWP::UserAgent for more
     my $response = $UA->request( $request, \&cb_content );
     if ( $response->code != 200 ) {
         $class->headers($response) unless ($headers_set);
@@ -91,22 +91,22 @@ sub headers {
     $class = shift;
     my $response = shift;
     my $tmp = $response->header('Content-Type');
-    $r->content_type( $tmp ) if( $tmp );
+    $r->content_type($tmp) if ($tmp);
+
     # Modif demandée par mail
     #$r->content_type( $response->header('Content-Type') );
     $r->status( $response->code );
     $r->status_line( join ' ', $response->code, $response->message );
 
     # Scan LWP response headers to generate Apache response headers
-    my ( $location_old, $location_new ) = split /[;,]+/,
-      $r->dir_config('LmLocationToReplace');
+    my ( $location_old, $location_new ) = split /[;,]+/, $r->dir_config('LmLocationToReplace');
     $response->scan(
         sub {
 
             # Replace Location headers
             $_[1] =~ s#$location_old#$location_new#
               if ( $location_old and $location_new and $_[0] =~ /Location/i );
-	    lmSetErrHeaderOut($r,@_);
+            lmSetErrHeaderOut( $r, @_ );
             $class->lmLog( "$class: header pushed to the client: " . $_[0] . ": " . $_[1], 'debug' );
             1;
         }

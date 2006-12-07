@@ -12,16 +12,12 @@ sub locationRulesInit {
         $locationCount->{$vhost} = 0;
         foreach ( keys %{ $args->{locationRules}->{$vhost} } ) {
             if ( $_ eq 'default' ) {
-                $defaultCondition->{$vhost} =
-                  $class->conditionSub(
-                    $args->{locationRules}->{$vhost}->{$_} );
+                $defaultCondition->{$vhost} = $class->conditionSub( $args->{locationRules}->{$vhost}->{$_} );
             }
             else {
                 $locationCondition->{$vhost}->[ $locationCount->{$vhost} ] =
-                  $class->conditionSub(
-                    $args->{locationRules}->{$vhost}->{$_} );
-                $locationRegexp->{$vhost}->[ $locationCount->{$vhost} ] =
-                  qr/$_/;
+                  $class->conditionSub( $args->{locationRules}->{$vhost}->{$_} );
+                $locationRegexp->{$vhost}->[ $locationCount->{$vhost} ] = qr/$_/;
                 $locationCount->{$vhost}++;
             }
         }
@@ -40,13 +36,12 @@ sub forgeHeadersInit {
         my %tmp = %{ $args->{exportedHeaders}->{$vhost} };
         foreach ( keys %tmp ) {
             $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-	    $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
+            $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
         }
 
         my $sub;
         foreach ( keys %tmp ) {
-            $sub .=
-              "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
+            $sub .= "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
         }
         $sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
         eval "$sub";
@@ -75,7 +70,7 @@ sub grant {
         }
     }
     unless ( $defaultCondition->{$vhost} ) {
-        $class->lmLog( "User rejected because VirtualHost \"$vhost\" has no configuration", 'warn');
+        $class->lmLog( "User rejected because VirtualHost \"$vhost\" has no configuration", 'warn' );
     }
     return &{ $defaultCondition->{$vhost} };
 }

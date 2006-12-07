@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.621 Tue Dec 5 20:12:12 2006
+	- move Handler.pod to Handler.pm to avoid CPAN bug
+	- remove mod_perl dependency
+
 0.62  Fri Nov 3 8:08:37 2006
 	- correction in documentation
 	- add mod_perl in PREREQ_PM (CPAN tester failed)

@@ -9,8 +9,8 @@ use Storable qw(thaw);
 use MIME::Base64;
 
 BEGIN {
-    if (MP() == 2) {
-	Apache2::compat->import();
+    if ( MP() == 2 ) {
+        Apache2::compat->import();
     }
 }
 
@@ -26,10 +26,10 @@ our ( $dbiChain, $dbiUser, $dbiPassword );
 my ( $dbh, $cfgNum ) = ( undef, 0 );
 
 sub localInit($$) {
-    my($class,$args) = @_;
-    $dbiChain = $args->{dbiChain} or die "No dbiChain found";
-    $dbiUser = $args->{dbiUser} or $class->lmLog("No dbiUser found", 'warn');
-    $dbiPassword = $args->{dbiPassword} or $class->lmLog("No dbiPassword found",'warn');
+    my ( $class, $args ) = @_;
+    $dbiChain    = $args->{dbiChain}    or die "No dbiChain found";
+    $dbiUser     = $args->{dbiUser}     or $class->lmLog( "No dbiUser found", 'warn' );
+    $dbiPassword = $args->{dbiPassword} or $class->lmLog( "No dbiPassword found", 'warn' );
     $class->SUPER::localInit($args);
 }
 

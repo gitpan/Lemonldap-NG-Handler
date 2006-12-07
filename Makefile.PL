@@ -6,7 +6,6 @@ WriteMakefile(
     NAME              => 'Lemonldap::NG::Handler',
     VERSION_FROM      => 'lib/Lemonldap/NG/Handler.pm',
     PREREQ_PM         => {
-		'Apache::Constants' => 0,
 		'Apache::Session'   => 0,
 		'LWP::UserAgent'    => 0,
 		'Cache::Cache'      => 0,

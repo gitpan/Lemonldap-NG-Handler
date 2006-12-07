@@ -1,11 +1,12 @@
 package Lemonldap::NG::Handler;
 
 print STDERR "See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
-our $VERSION="0.621";
+our $VERSION = "0.63";
 
 1;
 
 __END__
+
 =pod
 
 =head1 NAME

@@ -1,8 +1,6 @@
 package Lemonldap::NG::Handler::SharedConf;
 
-use 5.008004;
 use strict;
-use warnings;
 
 use Lemonldap::NG::Handler::Simple qw(:all);
 use Lemonldap::NG::Handler::Vhost;
@@ -11,31 +9,27 @@ use Cache::Cache qw($EXPIRES_NEVER);
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
 our $VERSION    = '0.3';
-our $cfgNum    = 0;
+our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
 our $childLock = 0;
 
-*EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
-*EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
-
 BEGIN {
-    if (MP() == 2) {
-	Apache2::compat->import();
-	threads::shared::share($childLock)
+    if ( MP() == 2 ) {
+        Apache2::compat->import();
+        threads::shared::share($childLock);
     }
+    *EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
+    *EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
+    push( @{ $EXPORT_TAGS{$_} }, qw($reloadTime $lastReload) ) foreach (qw(variables localStorage));
+    push @EXPORT_OK, qw($reloadTime $lastReload);
 }
-
-push( @{ $EXPORT_TAGS{$_} }, qw($reloadTime $lastReload) )
-  foreach (qw(variables localStorage));
-
-push @EXPORT_OK, qw($reloadTime $lastReload);
 
 # INIT PROCESS
 
 # init is overloaded to call only localInit. globalInit is called later
 sub init($$) {
-    my($class,$args) = @_;
+    my ( $class, $args ) = @_;
     $reloadTime = $args->{reloadTime} || 600;
     $class->localInit($args);
 }
@@ -43,7 +37,7 @@ sub init($$) {
 # Each $reloadTime, the Apache child verify if its configuration is the same
 # as the configuration stored in the local storage.
 sub run($$) {
-    my ($class, $r) = @_;
+    my ( $class, $r ) = @_;
     if ( time() - $lastReload > $reloadTime ) {
         unless ( $class->localConfUpdate($r) == OK ) {
             $class->lmLog( "$class: No configuration found", 'error' );
@@ -56,19 +50,19 @@ sub run($$) {
 sub confTest($$) {
     my ( $class, $args ) = @_;
     if ( $args->{_n_conf} ) {
-        return 1 if($args->{_n_conf} == $cfgNum or $childLock);
-	$childLock = 1;
+        return 1 if ( $args->{_n_conf} == $cfgNum or $childLock );
+        $childLock = 1;
         $class->globalInit($args);
-	$childLock = 0;
+        $childLock = 0;
         return 1;
     }
     return 0;
 }
 
 sub localConfUpdate($$) {
-    my ($class,$r) = @_;
+    my ( $class, $r ) = @_;
     my $args;
-    return SERVER_ERROR unless ( $refLocalStorage );
+    return SERVER_ERROR unless ($refLocalStorage);
     unless ( $args = $refLocalStorage->get("conf") and $class->confTest($args) ) {
 
         # TODO: LOCK
@@ -109,12 +103,12 @@ sub getConf {
 sub refresh($$) {
     my ( $class, $r ) = @_;
     $class->lmLog( "$class: request for configuration reload", 'info' );
-    $r->handler ( "perl-script" );
+    $r->handler("perl-script");
     if ( $class->globalConfUpdate($r) == OK ) {
-        $r->push_handlers ( PerlHandler => sub { OK } );
+        $r->push_handlers( PerlHandler => sub { OK } );
     }
     else {
-        $r->push_handlers ( PerlHandler => sub { SERVER_ERROR } );
+        $r->push_handlers( PerlHandler => sub { SERVER_ERROR } );
     }
     return DONE;
 }
