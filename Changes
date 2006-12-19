@@ -1,5 +1,12 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.7   Tue Dec 19 19:09:09 2006
+	- config is now shared with Lemonldap::NG::Manager::Conf
+	- use Safe for locationRules and exportedHeaders 'eval'
+
+0.63  Sun Dec 17 14:54:14 2006
+	- bug corrections
+
 0.621 Tue Dec 5 20:12:12 2006
 	- move Handler.pod to Handler.pm to avoid CPAN bug
 	- remove mod_perl dependency

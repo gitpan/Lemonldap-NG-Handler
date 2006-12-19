@@ -4,8 +4,9 @@ use strict;
 
 use MIME::Base64;
 use Exporter 'import';
+use Safe;
 
-our $VERSION = '0.6';
+our $VERSION = '0.7';
 
 our %EXPORT_TAGS = (
     localStorage => [
@@ -17,7 +18,7 @@ our %EXPORT_TAGS = (
     locationRules => [
         qw(
           $locationCondition $defaultCondition $locationCount
-          $locationRegexp $apacheRequest $datas
+          $locationRegexp $apacheRequest $datas $safe
           )
     ],
     import => [
@@ -55,6 +56,7 @@ our (
     $apacheRequest,       $locationCount,     $cookieName,           $portal,
     $datas,               $globalStorage,     $globalStorageOptions, $localStorage,
     $localStorageOptions, $whatToTrace,       $https,                $refLocalStorage,
+    $safe,
 );
 
 ##########################################
@@ -91,21 +93,23 @@ BEGIN {
         *SERVER_ERROR = \&Apache2::Const::SERVER_ERROR;
         require Apache2::compat;
         Apache2::compat->import();
-        require threads::shared;
-        threads::shared::share($locationRegexp);
-        threads::shared::share($locationCondition);
-        threads::shared::share($defaultCondition);
-        threads::shared::share($forgeHeaders);
-        threads::shared::share($locationCount);
-        threads::shared::share($cookieName);
-        threads::shared::share($portal);
-        threads::shared::share($globalStorage);
-        threads::shared::share($globalStorageOptions);
-        threads::shared::share($localStorage);
-        threads::shared::share($localStorageOptions);
-        threads::shared::share($whatToTrace);
-        threads::shared::share($https);
-        threads::shared::share($refLocalStorage);
+        eval {
+            require threads::shared;
+            threads::shared::share($locationRegexp);
+            threads::shared::share($locationCondition);
+            threads::shared::share($defaultCondition);
+            threads::shared::share($forgeHeaders);
+            threads::shared::share($locationCount);
+            threads::shared::share($cookieName);
+            threads::shared::share($portal);
+            threads::shared::share($globalStorage);
+            threads::shared::share($globalStorageOptions);
+            threads::shared::share($localStorage);
+            threads::shared::share($localStorageOptions);
+            threads::shared::share($whatToTrace);
+            threads::shared::share($https);
+            threads::shared::share($refLocalStorage);
+        };
     }
     elsif ( MP() == 1 ) {
         require Apache;
@@ -122,7 +126,7 @@ BEGIN {
             sub DECLINED {1}
             sub DONE {1}
             sub SERVER_ERROR {1}
-	';
+        ';
     }
     *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
 }
@@ -182,11 +186,9 @@ sub lmSetErrHeaderOut {
 sub lmSetHeaderOut {
     my ( $r, $h, $v ) = @_;
     if ( MP() == 2 ) {
-        print STDERR "DEBUG2 $h => $v\n";
         return $r->headers_out->set( $h => $v );
     }
     else {
-        print STDERR "DEBUG1 $h => $v\n";
         return $r->header_out( $h => $v );
     }
 }
@@ -204,6 +206,10 @@ sub lmHeaderOut {
 ##############################
 # Initialization subroutines #
 ##############################
+
+# Security jail
+$safe = new Safe;
+$safe->share('&encode_base64','$datas');
 
 # init() : by default, it calls localInit and globalInit, but with
 #          a shared configuration, init() is overloaded to call only
@@ -300,7 +306,7 @@ sub conditionSub {
       if ( $cond =~ /^deny$/i );
     $cond =~ s/\$(\w+)/\$datas->{$1}/g;
     my $sub;
-    eval '$sub = sub {return (' . $cond . ')}';
+    $sub = $safe->reval("sub {return ( $cond )}");
     return $sub;
 }
 
@@ -355,9 +361,10 @@ sub forgeHeadersInit {
     foreach ( keys %tmp ) {
         $sub .= "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
     }
-    $sub = "\$forgeHeaders = sub {$sub};";
-    eval "$sub";
-    $class->lmLog( "$class: Unable to forge headers: $@ $sub", 'error' ) if ($@);
+    #$sub = "\$forgeHeaders = sub {$sub};";
+    #eval "$sub";
+    $forgeHeaders = $safe->reval("sub {$sub};");
+    $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' ) if ($@);
 }
 
 ################
@@ -502,8 +509,8 @@ Create your own package:
   our @ISA = qw(Lemonldap::NG::Handler::Simple);
 
   __PACKAGE__->init ({locationRules => { 'default' => '$ou =~ /brh/'},
-	 globalStorage        => 'Apache::Session::MySQL',
-	 globalStorageOptions => {
+         globalStorage        => 'Apache::Session::MySQL',
+         globalStorageOptions => {
                DataSource       => 'dbi:mysql:database=dbname;host=127.0.0.1',
                UserName         => 'db_user',
                Password         => 'db_password',
@@ -512,9 +519,9 @@ Create your own package:
                LockUserName     => 'db_user',
                LockPassword     => 'db_password',
            },
-	 localStorage         => 'Cache::DBFile',
-	 localStorageOptions  => {},
-	 portal               => 'https://portal/',
+         localStorage         => 'Cache::DBFile',
+         localStorageOptions  => {},
+         portal               => 'https://portal/',
        });
 
 More complete example
@@ -525,11 +532,11 @@ More complete example
   our @ISA = qw(Lemonldap::NG::Handler::Simple);
 
   __PACKAGE__->init ( { locationRules => {
-	     '^/pj/.*$'       => q($qualif="opj"),
-	     '^/rh/.*$'       => q($ou=~/brh/),
-	     '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
+             '^/pj/.*$'       => q($qualif="opj"),
+             '^/rh/.*$'       => q($ou=~/brh/),
+             '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
              default => 'accept', # means that all authenticated users are greanted
-	   },
+           },
            globalStorage        => 'Apache::Session::MySQL',
            globalStorageOptions => {
                DataSource       => 'dbi:mysql:database=dbname;host=127.0.0.1',
@@ -540,16 +547,16 @@ More complete example
                LockUserName     => 'db_user',
                LockPassword     => 'db_password',
            },
-	   localStorage         => 'Cache::DBFile',
-	   localStorageOptions  => {},
-	   cookieName           => 'lemon',
-	   portal               => 'https://portal/',
-	   whatToTrace          => '$uid',
-	   exportedHeaders      => {
-	       'Auth-User'      => '$uid',
-	       'Unit'           => '$ou',
-	   https                => 1,
-	 }
+           localStorage         => 'Cache::DBFile',
+           localStorageOptions  => {},
+           cookieName           => 'lemon',
+           portal               => 'https://portal/',
+           whatToTrace          => '$uid',
+           exportedHeaders      => {
+               'Auth-User'      => '$uid',
+               'Unit'           => '$ou',
+           https                => 1,
+         }
        );
 
 Call your package in <apache-directory>/conf/httpd.conf

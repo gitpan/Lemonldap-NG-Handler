@@ -1,16 +1,18 @@
 Changes
-Makefile.PL
-MANIFEST
-README
+example/lmH-apache.conf
+example/MyHandler.pm
 lib/Lemonldap/NG/Handler.pm
-lib/Lemonldap/NG/Handler/Simple.pm
 lib/Lemonldap/NG/Handler/Proxy.pm
-lib/Lemonldap/NG/Handler/Vhost.pm
 lib/Lemonldap/NG/Handler/SharedConf.pm
 lib/Lemonldap/NG/Handler/SharedConf/DBI.pm
-t/Lemonldap-NG-Handler-Simple.t
+lib/Lemonldap/NG/Handler/Simple.pm
+lib/Lemonldap/NG/Handler/Vhost.pm
+Makefile.PL
+MANIFEST
+META.yml			Module meta-data (added by MakeMaker)
+README
 t/Lemonldap-NG-Handler-Proxy.t
-t/Lemonldap-NG-Handler-Vhost.t
-t/Lemonldap-NG-Handler-SharedConf.t
 t/Lemonldap-NG-Handler-SharedConf-DBI.t
-META.yml                                 Module meta-data (added by MakeMaker)
+t/Lemonldap-NG-Handler-SharedConf.t
+t/Lemonldap-NG-Handler-Simple.t
+t/Lemonldap-NG-Handler-Vhost.t

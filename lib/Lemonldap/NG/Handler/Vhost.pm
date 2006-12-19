@@ -4,7 +4,7 @@ use Lemonldap::NG::Handler::Simple qw(:locationRules :headers);
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
@@ -43,9 +43,10 @@ sub forgeHeadersInit {
         foreach ( keys %tmp ) {
             $sub .= "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
         }
-        $sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
-        eval "$sub";
-        $class->lmLog( "$class: Unable to forge headers: $@ $sub", 'error' ) if ($@);
+        #$sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
+        #eval "$sub";
+	$forgeHeaders->{'$vhost'} = $safe->reval("sub {$sub}");
+        $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' ) if ($@);
     }
 }
 

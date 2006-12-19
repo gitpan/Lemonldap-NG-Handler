@@ -14,7 +14,7 @@ BEGIN {
     }
 }
 
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -27,37 +27,14 @@ my ( $dbh, $cfgNum ) = ( undef, 0 );
 
 sub localInit($$) {
     my ( $class, $args ) = @_;
-    $dbiChain    = $args->{dbiChain}    or die "No dbiChain found";
-    $dbiUser     = $args->{dbiUser}     or $class->lmLog( "No dbiUser found", 'warn' );
-    $dbiPassword = $args->{dbiPassword} or $class->lmLog( "No dbiPassword found", 'warn' );
-    $class->SUPER::localInit($args);
-}
-
-sub getConf {
-    my $class = shift;
-    $dbh = DBI->connect_cached( $dbiChain, $dbiUser, $dbiPassword );
-    my $sth = $dbh->prepare("SELECT max(cfgNum) from lmConfig");
-    $sth->execute();
-    my @row = $sth->fetchrow_array;
-    unless ( $row[0] ) {
-        $class->lmLog( "$class: getConf: No configuration found", 'error' );
-        return undef;
-    }
-    $class->lmLog( "$class: configuration found: " . $row[0] . ", previous was: $cfgNum", 'notice' );
-    $cfgNum = $row[0];
-    $sth =
-      $dbh->prepare( "select locationRules, globalStorage, "
-          . "globalStorageOptions, exportedHeaders, portal "
-          . "from lmConfig where(cfgNum=$cfgNum)" );
-    $sth->execute();
-    @row = $sth->fetchrow_array;
-    return {
-        locationRules        => thaw( decode_base64( $row[0] ) ),
-        globalStorage        => $row[1],
-        globalStorageOptions => thaw( decode_base64( $row[2] ) ),
-        exportedHeaders      => thaw( decode_base64( $row[3] ) ),
-        portal               => $row[4],
+    $args->configStorage = {
+	type        => 'DBI',
+	dbiChain    => $args->{dbiChain},
+	dbiUser     => $args->{dbiUser},
+	dbiPassword => $args->{dbiPassword},
+	dbiTable    => $args->{dbiTable},
     };
+    $class->SUPER::localInit($args);
 }
 
 1;
@@ -68,7 +45,32 @@ __END__
 Lemonldap::NG::Handler::SharedConf::DBI - Module to share Lemonldap::NG
 configuration using DBI.
 
+IMPORTANT: This module is written for compatibility. Now, you an use directly
+Lemonldap::NG::Handler::SharedConf as shown bellow:
+
 =head1 SYNOPSIS
+
+New usage:
+
+  package My::Package;
+  use Lemonldap::NG::Handler::SharedConf;
+  @ISA = qw(Lemonldap::NG::Handler::SharedConf);
+  __PACKAGE__->init ( {
+    localStorage        => "Cache::FileCache",
+    localStorageOptions => {
+        'namespace' => 'MyNamespace',
+        'default_expires_in' => 600,
+      },
+    reloadTime          => 1200, # Default: 600
+    configStorage       => {
+       type                => "DBI"
+       dbiChain            => "DBI:mysql:database=$database;host=$hostname;port=$port",
+       dbiUser             => "lemonldap",
+       dbiPassword         => "password",
+    },
+  } );
+
+Old usage:
 
   package My::Package;
   use Lemonldap::NG::Handler::SharedConf::DBI;
@@ -83,7 +85,7 @@ configuration using DBI.
     reloadTime          => 1200, # Default: 600
     dbiChain            => "DBI:mysql:database=$database;host=$hostname;port=$port",
     dbiUser             => "lemonldap",
-    dbiPassword          => "password",
+    dbiPassword         => "password",
   } );
 
 Call your package in /apache-dir/conf/httpd.conf :
@@ -147,9 +149,9 @@ stored configuration has changed and reload it if it has.
     ldapPort int,
     ldapBase text,
     securedCookie int,
-    cookiename text,
+    cookieName text,
     authentication text,
-    exportedvars text,
+    exportedVars text,
     managerDn text,
     managerPassword text,
     PRIMARY KEY (cfgNum)

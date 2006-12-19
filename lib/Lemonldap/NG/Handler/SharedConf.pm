@@ -4,20 +4,29 @@ use strict;
 
 use Lemonldap::NG::Handler::Simple qw(:all);
 use Lemonldap::NG::Handler::Vhost;
+use Lemonldap::NG::Manager;
 use Cache::Cache qw($EXPIRES_NEVER);
 
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.3';
+our $VERSION    = '0.5';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
 our $childLock = 0;
+our $lmConf;
 
 BEGIN {
     if ( MP() == 2 ) {
-        Apache2::compat->import();
-        threads::shared::share($childLock);
+	eval {
+	    require threads::shared;
+            Apache2::compat->import();
+            threads::shared::share($childLock);
+            threads::shared::share($childLock);
+            threads::shared::share($childLock);
+            threads::shared::share($childLock);
+            threads::shared::share($childLock);
+	};
     }
     *EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
     *EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
@@ -32,6 +41,12 @@ sub init($$) {
     my ( $class, $args ) = @_;
     $reloadTime = $args->{reloadTime} || 600;
     $class->localInit($args);
+}
+
+sub localInit {
+    my($class, $args) = @_;
+    $lmConf = Lemonldap::NG::Manager::Conf->new ( $args->{configStorage} );
+    $class->SUPER::localInit($args);
 }
 
 # Each $reloadTime, the Apache child verify if its configuration is the same
@@ -81,7 +96,7 @@ sub globalConfUpdate {
     my $tmp   = $class->getConf;
 
     # getConf can return an Apache constant in case of error
-    return $tmp unless (%$tmp);
+    return $tmp unless (ref($tmp));
     $class->setConf($tmp);
     OK;
 }
@@ -95,9 +110,13 @@ sub setConf {
 }
 
 sub getConf {
-
-    # MUST BE OVERLOADED
-    return {};
+    my $class = shift;
+    my $tmp = $lmConf->getConf;
+    unless(ref($tmp)) {
+        $class->lmLog( "$class: Unable to load configuration", 'error');
+        return SERVER_ERROR;
+    }
+    return $tmp;
 }
 
 sub refresh($$) {
@@ -118,40 +137,43 @@ __END__
 
 =head1 NAME
 
-Lemonldap::NG::Handler::SharedConf - Perl extension for adding dynamic
-configuration to Lemonldap::NG::Handler::Simple. To use for inheritance.
+Lemonldap::NG::Handler::SharedConf - Perl extension to use dynamic
+configuration provide by Lemonldap::NG::Manager.
 
 =head1 SYNOPSIS
 
   package My::Package;
   use Lemonldap::NG::Handler::SharedConf;
   @ISA = qw(Lemonldap::NG::Handler::SharedConf);
-  
-  sub getConf {
-    # Write here your configuration download system
-    # It has to return a hash reference containing
-    # global configuration variables:
-    # {
-    #  locationRules => { '^/.*$' => '$ou =~ /brh/'},
-    #  globalStorage        => 'Apache::Session::MySQL',
-    #  globalStorageOptions => {
-    #    ...
-    #  }
-    #  portal               => 'https://portal/',
-    # }
-    # See L<Lemonldap::NG::Handler::Simple> for more
-  }
-  
   __PACKAGE__->init ( {
-    localStorage        => "Cache::DBFile",
-    localStorageOptions => {},
+    localStorage        => "Cache::FileCache",
+    localStorageOptions => {
+        'namespace' => 'MyNamespace',
+        'default_expires_in' => 600,
+      },
     reloadTime          => 1200, # Default: 600
+    configStorage       => {
+       type                => "DBI"
+       dbiChain            => "DBI:mysql:database=$database;host=$hostname;port=$port",
+       dbiUser             => "lemonldap",
+       dbiPassword         => "password",
+    },
   } );
+
+Call your package in /apache-dir/conf/httpd.conf :
+
+  PerlRequire MyFile
+  # TOTAL PROTECTION
+  PerlInitHandler My::Package
+  # OR SELECTED AREA
+  <Location /protected-area>
+    PerlInitHandler My::Package
+  </Location>
 
 The configuration is loaded only at Apache start. Create an URI to force
 configuration reload, so you don't need to restart Apache at each change :
 
-  # <apache>/conf/httpd.conf
+  # /apache-dir/conf/httpd.conf
   <Location /location/that/I/ve/choosed>
     Order deny,allow
     Deny from all
@@ -161,11 +183,16 @@ configuration reload, so you don't need to restart Apache at each change :
 
 =head1 DESCRIPTION
 
-This library splits L<Lemonldap::NG::Handler::Simple> initialization into 2
-phases: local initialization and global configuration set. It can be used if
-you want to write a module that can change its global configuration without
-restarting Apache and that use a central configuration storage (like DBI,
-see L<Lemonldap::NG::SharedConf::DBI>).
+This library inherit from L<Lemonldap::NG::Handler::Simple> to build a
+complete SSO Handler System: a central database contains the policy of your
+domain. People that want to access to a protected applications are redirected
+to the portal that run L<Lemonldap::NG::Portal::SharedConf>. After reading
+configuration from the database and authenticating the user, it stores a key
+word for each application the user is granted to access to.
+Then the user is redirected to the application he wanted to access and the
+Apache handler build with L<Lemonldap::NG::Handler::SharedConf::DBI> has just
+to verify that the keyword corresponding to the protected area is stored in
+the database.
 
 =head2 OVERLOADED SUBROUTINES
 
@@ -175,16 +202,9 @@ Like L<Lemonldap::NG::Handler::Simple>::init() but read only localStorage
 related options. You may change default time between two configuration checks
 with the C<reloadTime> parameter (default 600s).
 
-=head2 SUBROUTINE TO WRITE
-
 =head3 getConf
 
-Does nothing by default. You've to overload it to write your own configuration
-download system.
-
-=head2 EXPORT
-
-Same as L<Lemonldap::NG::Handler::Simple>.
+Call Lemonldap::NG::Manager::Conf qith the configStorage parameter.
 
 =head1 OPERATION
 
