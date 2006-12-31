@@ -6,7 +6,7 @@ use MIME::Base64;
 use Exporter 'import';
 use Safe;
 
-our $VERSION = '0.7';
+our $VERSION = '0.71';
 
 our %EXPORT_TAGS = (
     localStorage => [
@@ -209,7 +209,7 @@ sub lmHeaderOut {
 
 # Security jail
 $safe = new Safe;
-$safe->share('&encode_base64','$datas');
+$safe->share('&encode_base64','$datas', '&lmSetHeaderIn', '$apacheRequest');
 
 # init() : by default, it calls localInit and globalInit, but with
 #          a shared configuration, init() is overloaded to call only
@@ -315,10 +315,10 @@ sub defaultValuesInit {
     my ( $class, $args ) = @_;
 
     # Other values
-    $cookieName  = $args->{cookieName}  || 'lemon';
-    $whatToTrace = $args->{whatToTrace} || '$uid';
+    $cookieName  ||= $args->{cookieName}  || 'lemon';
+    $whatToTrace ||= $args->{whatToTrace} || '$uid';
     $whatToTrace =~ s/\$//g;
-    $https = $args->{https};
+    $https = $args->{https} unless defined($https);
     $https = 1 unless defined($https);
 }
 

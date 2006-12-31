@@ -4,7 +4,7 @@ use Lemonldap::NG::Handler::Simple qw(:locationRules :headers);
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
@@ -45,7 +45,7 @@ sub forgeHeadersInit {
         }
         #$sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
         #eval "$sub";
-	$forgeHeaders->{'$vhost'} = $safe->reval("sub {$sub}");
+	$forgeHeaders->{$vhost} = $safe->reval("sub {$sub}");
         $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' ) if ($@);
     }
 }
@@ -58,7 +58,7 @@ sub sendHeaders {
         &{ $forgeHeaders->{$vhost} };
     }
     else {
-        lmSetHeaderIn( $apacheRequest, 'Auth-User' => '$uid' );
+        lmSetHeaderIn( $apacheRequest, 'Auth-User' => $datas->{uid} );
     }
 }
 

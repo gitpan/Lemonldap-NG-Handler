@@ -9,7 +9,7 @@ use Cache::Cache qw($EXPIRES_NEVER);
 
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.5';
+our $VERSION    = '0.51';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -46,6 +46,7 @@ sub init($$) {
 sub localInit {
     my($class, $args) = @_;
     $lmConf = Lemonldap::NG::Manager::Conf->new ( $args->{configStorage} );
+    $class->defaultValuesInit($args);
     $class->SUPER::localInit($args);
 }
 
@@ -151,13 +152,12 @@ configuration provide by Lemonldap::NG::Manager.
         'namespace' => 'MyNamespace',
         'default_expires_in' => 600,
       },
-    reloadTime          => 1200, # Default: 600
     configStorage       => {
        type                => "DBI"
        dbiChain            => "DBI:mysql:database=$database;host=$hostname;port=$port",
        dbiUser             => "lemonldap",
        dbiPassword         => "password",
-    },
+      },
   } );
 
 Call your package in /apache-dir/conf/httpd.conf :

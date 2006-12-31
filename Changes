@@ -1,5 +1,11 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.71  Sun Dec 31 13:47:49 2006
+	- Bug corrections in Vhosts: default header does not work
+	                             Safe does not work because lmSetHeaderIn
+                                       was not shared
+	- Example correction
+
 0.7   Tue Dec 19 19:09:09 2006
 	- config is now shared with Lemonldap::NG::Manager::Conf
 	- use Safe for locationRules and exportedHeaders 'eval'

@@ -176,8 +176,8 @@ sessions.
 
 =head1 SEE ALSO
 
-L<Lemonldap::Manager>, L<Lemonldap::NG::Portal::SharedConf::DBI>,
-L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Handler::SharedConf>
+L<Lemonldap::Manager>, L<Lemonldap::NG::Handler>,
+L<Lemonldap::NG::Handler::SharedConf>
 
 =head1 AUTHOR
 

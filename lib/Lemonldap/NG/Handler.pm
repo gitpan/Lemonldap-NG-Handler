@@ -1,7 +1,7 @@
 package Lemonldap::NG::Handler;
 
 print STDERR "See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
-our $VERSION = "0.7";
+our $VERSION = "0.71";
 
 1;
 
@@ -20,19 +20,21 @@ Lemonldap::NG::Handler - The Apache module part of Lemonldap::NG Web-SSO system.
 Create your own package (example using a central configuration database):
 
   package My::Package;
-  use Lemonldap::NG::Handler::SharedConf::DBI;
-  @ISA = qw(Lemonldap::NG::Handler::SharedConf::DBI);
+  use Lemonldap::NG::Handler::SharedConf;
+  @ISA = qw(Lemonldap::NG::Handler::SharedConf);
   
   __PACKAGE__->init ( {
     # Local storage used for sessions and configuration
     localStorage        => "Cache::DBFile",
     localStorageOptions => {...},
     # How to get my configuration
-    dbiChain            => "DBI:mysql:database=$database;host=$hostname;port=$port",
-    dbiUser             => "lemonldap",
-    dbiassword          => "password",
+    configStorage       => {
+        type                => "DBI",
+        dbiChain            => "DBI:mysql:database=lemondb;host=$hostname",
+        dbiUser             => "lemonldap",
+        dbiPassword          => "password",
+    }
     # Maximum time to load a local stored configuration
-    reloadTime          => 1200, # Default: 600
   } );
 
 =head2 Configure Apache
@@ -68,8 +70,8 @@ It manages both authentication and authorization and provides headers for
 accounting. So you can have a full AAA protection for your web space as
 described below.
 
-The Apache module part works both with Apache 1 and 2 ie mod_perl 1 and 2 but
-not with mod_perl 1.99.
+The Apache module part works both with Apache 1 and 2 ie mod_perl 1 and 2
+but B<not with mod_perl 1.99>.
 
 =head2 Authentication, Autorization, Accounting
 
@@ -110,7 +112,8 @@ expressions and Perl expressions to use to grant access.
 
 =back
 
-=head4 Example
+=head4 Example (See L<Lemonldap::NG::Manager> to see how configuration is
+stored)
 
 Exported variables (in Lemonldap::NG::Portal, will be stored in
 configuration database):
@@ -270,10 +273,6 @@ directly to protect a single host.
 configuration can be centralized. Inherits from
 L<Lemonldap::NG::Handler::Vhost> and L<Lemonldap::NG::Handler::Simple>.
 
-=item * L<Lemonldap::NG::Handler::SharedConf::DBI>: the configuration is
-centralized in a database and access is done via L<DBI>. Inherits from
-L<Lemonldap::NG::Handler::SharedConf>.
-
 =item * L<Lemonldap::NG::Handler::Proxy>: this module isn't used to manage
 security but is written to create a reverse-proxy without using mod_proxy. In
 some case, mod_proxy does not manage correctly some redirections, that is why
@@ -288,7 +287,7 @@ download a mod_perl2 backport.
 
 =head1 SEE ALSO
 
-L<Lemonldap::NG::Handler::SharedConf::DBI>,
+L<Lemonldap::NG::Handler::SharedConf>,
 L<Lemonldap::NG::Portal>, L<Lemonldap::NG::Manager>
 
 =head1 AUTHOR
