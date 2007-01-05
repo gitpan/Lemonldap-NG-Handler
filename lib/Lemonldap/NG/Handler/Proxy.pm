@@ -53,7 +53,10 @@ sub run($$) {
             $_[1] =~ s/lemon=[^;]*;?// if ( $_[0] =~ /Cookie/i );
             return 1 if ( $_[1] =~ /^$/ );
             $request->header(@_) unless ( $_[0] =~ /^(Host|Referer)$/i );
-            $class->lmLog( "$class: header pushed to the server: " . $_[0] . ": " . $_[1], 'debug' );
+            $class->lmLog(
+                "$class: header pushed to the server: " . $_[0] . ": " . $_[1],
+                'debug'
+            );
             1;
         }
     );
@@ -90,7 +93,7 @@ sub cb_content {
 sub headers {
     $class = shift;
     my $response = shift;
-    my $tmp = $response->header('Content-Type');
+    my $tmp      = $response->header('Content-Type');
     $r->content_type($tmp) if ($tmp);
 
     # Modif demandée par mail
@@ -99,7 +102,8 @@ sub headers {
     $r->status_line( join ' ', $response->code, $response->message );
 
     # Scan LWP response headers to generate Apache response headers
-    my ( $location_old, $location_new ) = split /[;,]+/, $r->dir_config('LmLocationToReplace');
+    my ( $location_old, $location_new ) = split /[;,]+/,
+      $r->dir_config('LmLocationToReplace');
     $response->scan(
         sub {
 
@@ -107,7 +111,10 @@ sub headers {
             $_[1] =~ s#$location_old#$location_new#
               if ( $location_old and $location_new and $_[0] =~ /Location/i );
             lmSetErrHeaderOut( $r, @_ );
-            $class->lmLog( "$class: header pushed to the client: " . $_[0] . ": " . $_[1], 'debug' );
+            $class->lmLog(
+                "$class: header pushed to the client: " . $_[0] . ": " . $_[1],
+                'debug'
+            );
             1;
         }
     );

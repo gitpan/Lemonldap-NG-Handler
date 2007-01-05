@@ -4,7 +4,7 @@ use Lemonldap::NG::Handler::Simple qw(:locationRules :headers);
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.5';
+our $VERSION = '0.51';
 
 sub locationRulesInit {
     my ( $class, $args ) = @_;
@@ -12,7 +12,9 @@ sub locationRulesInit {
         $locationCount->{$vhost} = 0;
         foreach ( keys %{ $args->{locationRules}->{$vhost} } ) {
             if ( $_ eq 'default' ) {
-                $defaultCondition->{$vhost} = $class->conditionSub( $args->{locationRules}->{$vhost}->{$_} );
+                $defaultCondition->{$vhost} =
+                  $class->conditionSub(
+                    $args->{locationRules}->{$vhost}->{$_} );
             }
             else {
                 $locationCondition->{$vhost}->[ $locationCount->{$vhost} ] =
@@ -41,12 +43,17 @@ sub forgeHeadersInit {
 
         my $sub;
         foreach ( keys %tmp ) {
-            $sub .= "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
+            $sub .=
+              "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
+              . $tmp{$_} . ")));";
         }
+
         #$sub = "\$forgeHeaders->{'$vhost'} = sub {$sub};";
         #eval "$sub";
-	$forgeHeaders->{$vhost} = $safe->reval("sub {$sub}");
-        $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' ) if ($@);
+        $forgeHeaders->{$vhost} = $safe->reval("sub {$sub}");
+        $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}",
+            'error' )
+          if ($@);
     }
 }
 
@@ -71,7 +78,10 @@ sub grant {
         }
     }
     unless ( $defaultCondition->{$vhost} ) {
-        $class->lmLog( "User rejected because VirtualHost \"$vhost\" has no configuration", 'warn' );
+        $class->lmLog(
+            "User rejected because VirtualHost \"$vhost\" has no configuration",
+            'warn'
+        );
     }
     return &{ $defaultCondition->{$vhost} };
 }
@@ -112,7 +122,7 @@ Create your own package:
 Call your package in <apache-directory>/conf/httpd.conf
 
   PerlRequire MyFile
-  PerlInitHandler My::Package
+  PerlHeaderParserHandler My::Package
 
 =head1 DESCRIPTION
 

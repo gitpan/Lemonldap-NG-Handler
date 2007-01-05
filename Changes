@@ -1,5 +1,19 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.73  Thu Jan 4 15:34:22 2007
+	- In VirtualHost context, PerlInitHandler is an alias for
+	  PerlPostReadRequestHandler. So by encoding characters (%40 for 'a'),
+	  users can bypass some restrictions.
+	  Now PerlInitHandler is replaced by PerlHeaderParserHandler, so
+	  Lemonldap::NG is called after URI translation phase.
+	- Correction of a bug in internal redirections: now internal
+	  redirections are not examined: for example, http://test.example.com/
+	  is internaly redirected to /index.pl, but only the first request (/)
+	  is tested.
+
+0.72  Thu Jan 4 9:24:18 2007
+	- Correction in apache-1.3 configuration example file
+
 0.71  Sun Dec 31 13:47:49 2006
 	- Bug corrections in Vhosts: default header does not work
 	                             Safe does not work because lmSetHeaderIn

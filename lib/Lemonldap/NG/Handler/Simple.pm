@@ -6,24 +6,19 @@ use MIME::Base64;
 use Exporter 'import';
 use Safe;
 
-our $VERSION = '0.71';
+our $VERSION = '0.73';
 
 our %EXPORT_TAGS = (
-    localStorage => [
-        qw( $localStorage $localStorageOptions $refLocalStorage )
-    ],
-    globalStorage => [
-        qw( $globalStorage $globalStorageOptions )
-    ],
+    localStorage =>
+      [ qw( $localStorage $localStorageOptions $refLocalStorage ) ],
+    globalStorage => [ qw( $globalStorage $globalStorageOptions ) ],
     locationRules => [
         qw(
           $locationCondition $defaultCondition $locationCount
           $locationRegexp $apacheRequest $datas $safe
           )
     ],
-    import => [
-        qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS )
-    ],
+    import  => [ qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS ) ],
     headers => [
         qw(
           $forgeHeaders
@@ -34,29 +29,28 @@ our %EXPORT_TAGS = (
           lmSetErrHeaderOut
           )
     ],
-    traces => [
-        qw( $whatToTrace )
-    ],
-    apache => [
-        qw( MP lmLog OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR )
-    ],
+    traces => [ qw( $whatToTrace ) ],
+    apache =>
+      [ qw( MP lmLog OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR ) ],
 );
 
 our @EXPORT_OK = ();
-push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach (
+push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } )
+  foreach (
     qw( localStorage globalStorage locationRules import headers traces apache )
-);
+  );
 $EXPORT_TAGS{all} = \@EXPORT_OK;
 
 our @EXPORT = ();
 
 # Shared variables
 our (
-    $locationRegexp,      $locationCondition, $defaultCondition,     $forgeHeaders,
-    $apacheRequest,       $locationCount,     $cookieName,           $portal,
-    $datas,               $globalStorage,     $globalStorageOptions, $localStorage,
-    $localStorageOptions, $whatToTrace,       $https,                $refLocalStorage,
-    $safe,
+    $locationRegexp,      $locationCondition,    $defaultCondition,
+    $forgeHeaders,        $apacheRequest,        $locationCount,
+    $cookieName,          $portal,               $datas,
+    $globalStorage,       $globalStorageOptions, $localStorage,
+    $localStorageOptions, $whatToTrace,          $https,
+    $refLocalStorage,     $safe,
 );
 
 ##########################################
@@ -209,7 +203,7 @@ sub lmHeaderOut {
 
 # Security jail
 $safe = new Safe;
-$safe->share('&encode_base64','$datas', '&lmSetHeaderIn', '$apacheRequest');
+$safe->share( '&encode_base64', '$datas', '&lmSetHeaderIn', '$apacheRequest' );
 
 # init() : by default, it calls localInit and globalInit, but with
 #          a shared configuration, init() is overloaded to call only
@@ -234,7 +228,9 @@ sub localInit($$) {
 
         # At each Apache (re)start, we've to clear the cache to avoid living
         # with old datas
-        eval '$refLocalStorage = new ' . $localStorage . '($localStorageOptions);';
+        eval '$refLocalStorage = new '
+          . $localStorage
+          . '($localStorageOptions);';
         if ( defined $refLocalStorage ) {
             $refLocalStorage->clear();
         }
@@ -251,12 +247,20 @@ sub localInit($$) {
     # performances.
     no strict;
     if ( MP() == 2 ) {
-        Apache->push_handlers( PerlChildInitHandler => sub { return $class->initLocalStorage( $_[1], $_[0] ); } );
-        Apache->push_handlers( PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); } );
+        Apache->push_handlers(
+            PerlChildInitHandler => sub { return $class->initLocalStorage( $_[1], $_[0] ); }
+        );
+        Apache->push_handlers(
+            PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); }
+        );
     }
     else {
-        Apache->push_handlers( PerlChildInitHandler => sub { return $class->initLocalStorage(@_); } );
-        Apache->push_handlers( PerlCleanupHandler   => sub { return $class->cleanLocalStorage(@_); } );
+        Apache->push_handlers(
+            PerlChildInitHandler => sub { return $class->initLocalStorage(@_); }
+        );
+        Apache->push_handlers(
+            PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); }
+        );
     }
 }
 
@@ -282,11 +286,13 @@ sub locationRulesInit {
     # Pre compilation : both regexp and conditions
     foreach ( keys %{ $args->{locationRules} } ) {
         if ( $_ eq 'default' ) {
-            $defaultCondition = $class->conditionSub( $args->{locationRules}->{$_} );
+            $defaultCondition =
+              $class->conditionSub( $args->{locationRules}->{$_} );
         }
         else {
-            $locationCondition->[$locationCount] = $class->conditionSub( $args->{locationRules}->{$_} );
-            $locationRegexp->[$locationCount]    = qr/$_/;
+            $locationCondition->[$locationCount] =
+              $class->conditionSub( $args->{locationRules}->{$_} );
+            $locationRegexp->[$locationCount] = qr/$_/;
             $locationCount++;
         }
     }
@@ -315,8 +321,8 @@ sub defaultValuesInit {
     my ( $class, $args ) = @_;
 
     # Other values
-    $cookieName  ||= $args->{cookieName}  || 'lemon';
-    $whatToTrace ||= $args->{whatToTrace} || '$uid';
+    $cookieName  = $args->{cookieName}  || 'lemon';
+    $whatToTrace = $args->{whatToTrace} || '$uid';
     $whatToTrace =~ s/\$//g;
     $https = $args->{https} unless defined($https);
     $https = 1 unless defined($https);
@@ -359,12 +365,16 @@ sub forgeHeadersInit {
 
     my $sub;
     foreach ( keys %tmp ) {
-        $sub .= "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/," . $tmp{$_} . ")));";
+        $sub .=
+          "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
+          . $tmp{$_} . ")));";
     }
+
     #$sub = "\$forgeHeaders = sub {$sub};";
     #eval "$sub";
     $forgeHeaders = $safe->reval("sub {$sub};");
-    $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' ) if ($@);
+    $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' )
+      if ($@);
 }
 
 ################
@@ -386,13 +396,17 @@ sub forbidden {
     my $class = shift;
 
     # We use Apache::Log here
-    $class->lmLog( 'The user "' . $datas->{$whatToTrace} . '" was reject when he tried to access to ' . shift,
-        'notice' );
+    $class->lmLog(
+        'The user "' . $datas->{$whatToTrace} . '" was reject when he tried to access to ' . shift,
+        'notice'
+    );
     return FORBIDDEN;
 }
 
 # hideCookie : hide Lemonldap cookie to the protected application
 sub hideCookie {
+    my $class = shift;
+    $class->lmLog( "$class: removing cookie", 'debug' );
     my $tmp = lmHeaderIn( $apacheRequest, 'Cookie' );
     $tmp =~ s/$cookieName[^;]*;?//o;
     lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
@@ -401,18 +415,28 @@ sub hideCookie {
 # Redirect non-authenticated users to the portal
 sub goToPortal() {
     my ( $class, $url ) = @_;
-    my $urlc_init = encode_base64( "http" . ( $https ? "s" : "" ) . "://" . $apacheRequest->get_server_name() . $url );
+    my $urlc_init =
+      encode_base64( "http"
+          . ( $https ? "s" : "" ) . "://"
+          . $apacheRequest->get_server_name()
+          . $url );
     $urlc_init =~ s/[\n\s]//g;
-    $class->lmLog( "Redirect " . $apacheRequest->connection->remote_ip . " to portal (url was $url)", 'debug' );
+    $class->lmLog(
+        "Redirect "
+          . $apacheRequest->connection->remote_ip
+          . " to portal (url was $url)",
+        'debug'
+    );
     $apacheRequest->headers_out->set( 'Location' => "$portal?url=$urlc_init" );
     return REDIRECT;
 }
 
-# MAIN SUBROUTINE called by Apache (using PerlInitHandler option)
+# MAIN SUBROUTINE called by Apache (using PerlHeaderParserHandler option)
 sub run ($$) {
     my $class;
     ( $class, $apacheRequest ) = @_;
 
+    return DECLINED unless ( $apacheRequest->is_initial_req );
     my $uri = $apacheRequest->uri . ( $apacheRequest->args ? "?" . $apacheRequest->args : "" );
 
     # AUTHENTICATION
@@ -437,7 +461,8 @@ sub run ($$) {
             if ($@) {
 
                 # The cookie isn't yet available
-                $class->lmLog( "The cookie $id isn't yet available: $@", 'info' );
+                $class->lmLog( "The cookie $id isn't yet available: $@",
+                    'info' );
                 return $class->goToPortal($uri);
             }
             $datas->{$_} = $h{$_} foreach ( keys %h );
@@ -456,7 +481,12 @@ sub run ($$) {
 
     # AUTHORIZATION
     return $class->forbidden($uri) unless ( $class->grant($uri) );
-    $class->lmLog( "User " . $datas->{$whatToTrace} . " was authorizated to access to $uri", 'debug' );
+    $class->lmLog(
+        "User "
+          . $datas->{$whatToTrace}
+          . " was authorizated to access to $uri",
+        'debug'
+    );
 
     # ACCOUNTING
     # 2 - Inform remote application
@@ -464,7 +494,7 @@ sub run ($$) {
 
     # SECURITY
     # Hide Lemonldap cookie
-    hideCookie;
+    $class->hideCookie;
     OK;
 }
 
@@ -475,7 +505,9 @@ sub sendHeaders {
 sub initLocalStorage {
     my ( $class, $r ) = @_;
     if ( $localStorage and not $refLocalStorage ) {
-        eval '$refLocalStorage = new ' . $localStorage . '($localStorageOptions);';
+        eval '$refLocalStorage = new '
+          . $localStorage
+          . '($localStorageOptions);';
     }
     $class->lmLog( "Local cache initialization failed: $@", 'error' )
       unless ( defined $refLocalStorage );
@@ -563,10 +595,10 @@ Call your package in <apache-directory>/conf/httpd.conf
 
   PerlRequire MyFile
   # TOTAL PROTECTION
-  PerlInitHandler My::Package
+  PerlHeaderParserHandler My::Package
   # OR SELECTED AREA
   <Location /protected-area>
-    PerlInitHandler My::Package
+    PerlHeaderParserHandler My::Package
   </Location>
 
 =head1 DESCRIPTION

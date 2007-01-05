@@ -1,9 +1,9 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Lemonldap-NG-Handler
-version:      0.71
+version:      0.73
 version_from: lib/Lemonldap/NG/Handler.pm
-installdirs:  vendor
+installdirs:  site
 requires:
     Apache::Session:               0
     Cache::Cache:                  0

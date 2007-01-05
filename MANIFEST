@@ -1,5 +1,6 @@
 Changes
 example/lmH-apache.conf
+example/lmH-apache2.conf
 example/MyHandler.pm
 lib/Lemonldap/NG/Handler.pm
 lib/Lemonldap/NG/Handler/Proxy.pm

@@ -9,7 +9,7 @@ use Cache::Cache qw($EXPIRES_NEVER);
 
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.51';
+our $VERSION    = '0.52';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -18,19 +18,20 @@ our $lmConf;
 
 BEGIN {
     if ( MP() == 2 ) {
-	eval {
-	    require threads::shared;
+        eval {
+            require threads::shared;
             Apache2::compat->import();
             threads::shared::share($childLock);
             threads::shared::share($childLock);
             threads::shared::share($childLock);
             threads::shared::share($childLock);
             threads::shared::share($childLock);
-	};
+        };
     }
     *EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
     *EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
-    push( @{ $EXPORT_TAGS{$_} }, qw($reloadTime $lastReload) ) foreach (qw(variables localStorage));
+    push( @{ $EXPORT_TAGS{$_} }, qw($reloadTime $lastReload) )
+      foreach (qw(variables localStorage));
     push @EXPORT_OK, qw($reloadTime $lastReload);
 }
 
@@ -44,8 +45,8 @@ sub init($$) {
 }
 
 sub localInit {
-    my($class, $args) = @_;
-    $lmConf = Lemonldap::NG::Manager::Conf->new ( $args->{configStorage} );
+    my ( $class, $args ) = @_;
+    $lmConf = Lemonldap::NG::Manager::Conf->new( $args->{configStorage} );
     $class->defaultValuesInit($args);
     $class->SUPER::localInit($args);
 }
@@ -79,7 +80,8 @@ sub localConfUpdate($$) {
     my ( $class, $r ) = @_;
     my $args;
     return SERVER_ERROR unless ($refLocalStorage);
-    unless ( $args = $refLocalStorage->get("conf") and $class->confTest($args) ) {
+    unless ( $args = $refLocalStorage->get("conf") and $class->confTest($args) )
+    {
 
         # TODO: LOCK
         #unless ( $class->confTest($args) ) {
@@ -97,7 +99,7 @@ sub globalConfUpdate {
     my $tmp   = $class->getConf;
 
     # getConf can return an Apache constant in case of error
-    return $tmp unless (ref($tmp));
+    return $tmp unless ( ref($tmp) );
     $class->setConf($tmp);
     OK;
 }
@@ -112,9 +114,9 @@ sub setConf {
 
 sub getConf {
     my $class = shift;
-    my $tmp = $lmConf->getConf;
-    unless(ref($tmp)) {
-        $class->lmLog( "$class: Unable to load configuration", 'error');
+    my $tmp   = $lmConf->getConf;
+    unless ( ref($tmp) ) {
+        $class->lmLog( "$class: Unable to load configuration", 'error' );
         return SERVER_ERROR;
     }
     return $tmp;
@@ -164,10 +166,10 @@ Call your package in /apache-dir/conf/httpd.conf :
 
   PerlRequire MyFile
   # TOTAL PROTECTION
-  PerlInitHandler My::Package
+  PerlHeaderParserHandler My::Package
   # OR SELECTED AREA
   <Location /protected-area>
-    PerlInitHandler My::Package
+    PerlHeaderParserHandler My::Package
   </Location>
 
 The configuration is loaded only at Apache start. Create an URI to force
@@ -178,7 +180,7 @@ configuration reload, so you don't need to restart Apache at each change :
     Order deny,allow
     Deny from all
     Allow from my.manager.com
-    PerlInitHandler My::Package->refresh
+    PerlHeaderParserHandler My::Package->refresh
   </Location>
 
 =head1 DESCRIPTION
