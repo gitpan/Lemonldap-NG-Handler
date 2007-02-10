@@ -2,7 +2,6 @@ package Lemonldap::NG::Handler::SharedConf::DBI;
 
 use strict;
 
-use UNIVERSAL qw(can);
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 use DBI;
 use Storable qw(thaw);
@@ -14,7 +13,7 @@ BEGIN {
     }
 }
 
-our $VERSION = '0.51';
+our $VERSION = '0.52';
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -142,6 +141,8 @@ stored configuration has changed and reload it if it has.
     locationRules text,
     globalStorage text,
     globalStorageOptions text,
+    groups text,
+    macros text,
     exportedHeaders text,
     portal text,
     domain text,

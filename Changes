@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.74  Sun Feb 4 19:27:34 2007
+	- unprotect system documentation
+	- remove warning on Apache-1.3 ($ENV{MOD_PERL_API_VERSION} does not exist)
+
 0.73  Thu Jan 4 15:34:22 2007
 	- In VirtualHost context, PerlInitHandler is an alias for
 	  PerlPostReadRequestHandler. So by encoding characters (%40 for 'a'),
@@ -17,7 +21,7 @@ Revision history for Perl extension Lemonldap::NG::Handler.
 0.71  Sun Dec 31 13:47:49 2006
 	- Bug corrections in Vhosts: default header does not work
 	                             Safe does not work because lmSetHeaderIn
-                                       was not shared
+	                                   was not shared
 	- Example correction
 
 0.7   Tue Dec 19 19:09:09 2006

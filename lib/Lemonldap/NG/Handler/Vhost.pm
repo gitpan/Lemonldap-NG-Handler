@@ -107,17 +107,17 @@ Create your own package:
   
   __PACKAGE__->init ( { locationRules => {
              'vhost1.dc.com' => {
-	         'default' => '$ou =~ /brh/'
-	     },
-	     'vhost2.dc.com' => {
-	         '^/pj/.*$'       => q($qualif="opj"),
-		 '^/rh/.*$'       => q($ou=~/brh/),
-		 '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
+                 'default' => '$ou =~ /brh/'
+             },
+             'vhost2.dc.com' => {
+                 '^/pj/.*$'       => q($qualif="opj"),
+                 '^/rh/.*$'       => q($ou=~/brh/),
+                 '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
                  default          => 'accept',
-	     },
-	     # Put here others Lemonldap::NG::Handler::Simple options
-	   }
-	 );
+             },
+             # Put here others Lemonldap::NG::Handler::Simple options
+           }
+         );
 
 Call your package in <apache-directory>/conf/httpd.conf
 
