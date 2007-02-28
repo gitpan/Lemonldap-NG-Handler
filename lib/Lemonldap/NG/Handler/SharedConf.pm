@@ -15,6 +15,7 @@ our $lastReload = 0;
 our $reloadTime;
 our $childLock = 0;
 our $lmConf;
+our $localConfig;
 
 BEGIN {
     if ( MP() == 2 ) {
@@ -42,6 +43,7 @@ sub init($$) {
     my ( $class, $args ) = @_;
     $reloadTime = $args->{reloadTime} || 600;
     $class->localInit($args);
+    $localConfig = $args;
 }
 
 sub localInit {
@@ -100,6 +102,10 @@ sub globalConfUpdate {
 
     # getConf can return an Apache constant in case of error
     return $tmp unless ( ref($tmp) );
+    # Local arguments have a best precedence
+    foreach ( keys %$tmp ) {
+        $tmp->{$_} = $localConfig->{$_} if ( $localConfig->{$_} )
+    }
     $class->setConf($tmp);
     OK;
 }
@@ -223,7 +229,7 @@ local store.
 
 =head1 SEE ALSO
 
-L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Handler::SharedConf::DBI>
+L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Manager>, L<Lemonldap::NG::Portal>
 
 =back
 
@@ -233,7 +239,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+Copyright (C) 2005-2007 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,

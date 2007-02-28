@@ -3,6 +3,7 @@ example/lmH-apache.conf
 example/lmH-apache2.conf
 example/MyHandler.pm
 lib/Lemonldap/NG/Handler.pm
+lib/Lemonldap/NG/Handler/CDA.pm
 lib/Lemonldap/NG/Handler/Proxy.pm
 lib/Lemonldap/NG/Handler/SharedConf.pm
 lib/Lemonldap/NG/Handler/SharedConf/DBI.pm
@@ -12,6 +13,7 @@ Makefile.PL
 MANIFEST
 META.yml			Module meta-data (added by MakeMaker)
 README
+t/Lemonldap-NG-Handler-CDA.t
 t/Lemonldap-NG-Handler-Proxy.t
 t/Lemonldap-NG-Handler-SharedConf-DBI.t
 t/Lemonldap-NG-Handler-SharedConf.t

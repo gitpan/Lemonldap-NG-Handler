@@ -6,7 +6,7 @@ use MIME::Base64;
 use Exporter 'import';
 use Safe;
 
-our $VERSION = '0.74';
+our $VERSION = '0.75';
 
 our %EXPORT_TAGS = (
     localStorage =>
@@ -27,6 +27,9 @@ our %EXPORT_TAGS = (
           lmHeaderOut
           lmSetHeaderOut
           lmSetErrHeaderOut
+          $cookieName
+          $cookieSecured
+          $https
           )
     ],
     traces => [ qw( $whatToTrace ) ],
@@ -50,7 +53,7 @@ our (
     $cookieName,          $portal,               $datas,
     $globalStorage,       $globalStorageOptions, $localStorage,
     $localStorageOptions, $whatToTrace,          $https,
-    $refLocalStorage,     $safe,
+    $refLocalStorage,     $safe,                 $cookieSecured,
 );
 
 ##########################################
@@ -173,7 +176,7 @@ sub lmSetErrHeaderOut {
         return $r->err_headers_out->set( $h => $v );
     }
     else {
-        return $r->header_out( $h => $v );
+        return $r->err_header_out( $h => $v );
     }
 }
 
@@ -321,7 +324,8 @@ sub defaultValuesInit {
     my ( $class, $args ) = @_;
 
     # Other values
-    $cookieName  = $args->{cookieName}  || 'lemon';
+    $cookieName  = $args->{cookieName}  || 'lemonldap';
+    $cookieSecured = $args->{cookieSecured}  || 0;
     $whatToTrace = $args->{whatToTrace} || '$uid';
     $whatToTrace =~ s/\$//g;
     $https = $args->{https} unless defined($https);
@@ -540,7 +544,10 @@ Create your own package:
 
   our @ISA = qw(Lemonldap::NG::Handler::Simple);
 
-  __PACKAGE__->init ({locationRules => { 'default' => '$ou =~ /brh/'},
+  __PACKAGE__->init ({
+  	     locationRules        => {
+               default          => '$ou =~ /brh/'
+  	     },
          globalStorage        => 'Apache::Session::MySQL',
          globalStorageOptions => {
                DataSource       => 'dbi:mysql:database=dbname;host=127.0.0.1',
@@ -707,7 +714,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+Copyright (C) 2005-2007 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
