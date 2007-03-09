@@ -9,7 +9,7 @@ use Cache::Cache qw($EXPIRES_NEVER);
 
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.52';
+our $VERSION    = '0.53';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -22,11 +22,12 @@ BEGIN {
         eval {
             require threads::shared;
             Apache2::compat->import();
+            threads::shared::share($cfgNum);
+            threads::shared::share($lastReload);
+            threads::shared::share($reloadTime);
             threads::shared::share($childLock);
-            threads::shared::share($childLock);
-            threads::shared::share($childLock);
-            threads::shared::share($childLock);
-            threads::shared::share($childLock);
+            threads::shared::share($lmConf);
+            threads::shared::share($localConfig);
         };
     }
     *EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;

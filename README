@@ -20,7 +20,7 @@ described below.
 1 - INSTALLATION
 ================
 
-Lenmonldap::NG is a different project than Lemonldap and contains all you need
+Lemonldap::NG is a different project than Lemonldap and contains all you need
 to use and administer it. So softwares, like Lemonldap webmin module, may not
 work with Lemonldap::NG.
 

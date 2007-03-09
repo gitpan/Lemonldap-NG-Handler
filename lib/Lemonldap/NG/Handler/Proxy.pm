@@ -44,6 +44,12 @@ sub run($$) {
     ( $class, $r ) = @_;
     my $url = $r->uri;
     $url .= "?" . $r->args if ( $r->args );
+
+    # Uncomment this if you have lost of session problem with SAP.
+    # I don't know why cookie value and URL parameter differs but it causes
+    # this problem. By removing URL parameters, all works fine. SAP bug ?
+
+    # $url =~ s/sap-wd-cltwndid=[^\&]+//g;
     return DECLINED unless ( $base = $r->dir_config('LmProxyPass') );
     my $request = new HTTP::Request( $r->method, $base . $url );
 
@@ -95,9 +101,6 @@ sub headers {
     my $response = shift;
     my $tmp      = $response->header('Content-Type');
     $r->content_type($tmp) if ($tmp);
-
-    # Modif demandée par mail
-    #$r->content_type( $response->header('Content-Type') );
     $r->status( $response->code );
     $r->status_line( join ' ', $response->code, $response->message );
 

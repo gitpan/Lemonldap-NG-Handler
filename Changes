@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.76  Fri Mar 9 7:14:42 2007
+	- Little bug correction
+	- Delete of DBI.pm which is not more in use
+
 0.75  Sat Feb 24 16:36:56
 	- Adding cross-domain-authentication support
 	- local configuration overrides global configuration

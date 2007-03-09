@@ -2,7 +2,7 @@ package Lemonldap::NG::Handler;
 
 print STDERR
 "See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
-our $VERSION = "0.75";
+our $VERSION = "0.76";
 
 1;
 
