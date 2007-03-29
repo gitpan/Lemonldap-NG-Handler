@@ -6,6 +6,7 @@ use MIME::Base64;
 
 our $VERSION = '0.51';
 
+# TODO: split locationRules into 2 arrays
 sub locationRulesInit {
     my ( $class, $args ) = @_;
     foreach my $vhost ( keys %{ $args->{locationRules} } ) {
@@ -136,7 +137,8 @@ L<Lemonldap::NG::Handler::Simple>.
 
 =head1 SEE ALSO
 
-L<Lemonldap::NG::Handler(3)>
+L<Lemonldap::NG::Handler(3)>,
+http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 
 =head1 AUTHOR
 

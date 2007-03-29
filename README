@@ -14,8 +14,9 @@ described below.
      2.2 - Authorization
      2.3 - Accounting
  3 - Session storage system
- 4 - Author
- 5 - Copyright and licence
+ 4 - Logout system
+ 5 - Author
+ 6 - Copyright and licence
 
 1 - INSTALLATION
 ================
@@ -190,11 +191,24 @@ user each 10 minutes.
 Lemonldap::NG is very fast, but you can increase performance using a 
 Cache::Cache module that does not use disk access.
 
-4 - AUTHOR
+4 - LOGOUT SYSTEM
+
+Lemonldap::NG provides a single logout system: you can use it by adding a link
+to the portal with "logout=1" parameter in the portal (See
+Lemonldap::NG::Portal) and/or by configuring handler to intercept some URL
+(See Lemonldap::NG::Handler). The logout system:
+ * delete session in the global session storage,
+ * replace Lemonldap::NG cookie by '',
+ * delete handler caches only if logout action was started from a protected
+   application and only in the current Apache server. So in other servers,
+   session is still in cache for 10 minutes maximum if the user was connected
+   on it in the last 10 minutes.
+
+5 - AUTHOR
 
 Xavier Guimard, x.guimard@free.fr
 
-5 - COPYRIGHT AND LICENSE
+6 - COPYRIGHT AND LICENSE
 
 Copyright (C) 2005-2007 by Xavier Guimard x.guimard@free.fr
 

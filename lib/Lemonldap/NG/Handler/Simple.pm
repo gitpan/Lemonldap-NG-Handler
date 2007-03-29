@@ -5,6 +5,7 @@ use strict;
 use MIME::Base64;
 use Exporter 'import';
 use Safe;
+require POSIX;
 
 our $VERSION = '0.75';
 
@@ -282,6 +283,7 @@ sub globalInit {
 #       - regexp is used to test URIs
 #       - test contains an expression used to grant the user
 
+# TODO: split locationRules into 2 arrays
 sub locationRulesInit {
     my ( $class, $args ) = @_;
     $locationCount = 0;
@@ -313,6 +315,7 @@ sub conditionSub {
       if ( $cond =~ /^accept$/i );
     return sub { 0 }
       if ( $cond =~ /^deny$/i );
+    $cond =~ s/\$date/&POSIX::strftime("%Y%m%d%H%M%S",localtime())/e;
     $cond =~ s/\$(\w+)/\$datas->{$1}/g;
     my $sub;
     $sub = $safe->reval("sub {return ( $cond )}");
@@ -418,7 +421,7 @@ sub hideCookie {
 
 # Redirect non-authenticated users to the portal
 sub goToPortal() {
-    my ( $class, $url ) = @_;
+    my ( $class, $url, $arg ) = @_;
     my $urlc_init =
       encode_base64( "http"
           . ( $https ? "s" : "" ) . "://"
@@ -431,8 +434,16 @@ sub goToPortal() {
           . " to portal (url was $url)",
         'debug'
     );
-    $apacheRequest->headers_out->set( 'Location' => "$portal?url=$urlc_init" );
+    $apacheRequest->headers_out->set(
+        'Location' => "$portal?url=$urlc_init" . ( $arg ? "&$arg" : "" )
+    );
     return REDIRECT;
+}
+
+# Fetch $id
+sub fetchId() {
+    my $t = lmHeaderIn( $apacheRequest, 'Cookie' );
+    return ($t =~ /$cookieName=([^; ]+);?/o ) ? $1: 0;
 }
 
 # MAIN SUBROUTINE called by Apache (using PerlHeaderParserHandler option)
@@ -446,7 +457,7 @@ sub run ($$) {
     # AUTHENTICATION
     # I - recover the cookie
     my $id;
-    unless ( ($id) = ( lmHeaderIn( $apacheRequest, 'Cookie' ) =~ /$cookieName=([^; ]+);?/o ) ) {
+    unless ( $id = $class->fetchId ) {
         $class->lmLog( "$class: No cookie found", 'info' );
         return $class->goToPortal($uri);
     }
@@ -527,6 +538,22 @@ sub unprotect {
     DONE;
 }
 
+sub logout ($$) {
+    my $class;
+    ($class, $apacheRequest ) = @_;
+    if( my $id = $class->fetchId ) {
+        # Delete Apache thread datas
+        if ( $id eq $datas->{_session_id} ) {
+            $datas = {};
+        }
+        # Delete Apache local cache
+        if( $refLocalStorage and $refLocalStorage->get($id) ) {
+            $refLocalStorage->remove($id);
+        }
+    }
+    return $class->goToPortal( '/', 'logout=1' );
+}
+
 1;
 __END__
 
@@ -545,9 +572,9 @@ Create your own package:
   our @ISA = qw(Lemonldap::NG::Handler::Simple);
 
   __PACKAGE__->init ({
-  	     locationRules        => {
+         locationRules        => {
                default          => '$ou =~ /brh/'
-  	     },
+         },
          globalStorage        => 'Apache::Session::MySQL',
          globalStorageOptions => {
                DataSource       => 'dbi:mysql:database=dbname;host=127.0.0.1',
@@ -704,9 +731,8 @@ This is done to be compatible both with Apache 1 and 2.
 
 =head1 SEE ALSO
 
-=over
-
-L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Portal>
+L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Portal>,
+http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 
 =head1 AUTHOR
 

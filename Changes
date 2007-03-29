@@ -1,10 +1,15 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.77  Wed Mar 22 7:18:48 2007
+	- logout system
+	- $date is now available in rules
+	- Closes bug #306761 / forge.objectweb.org
+
 0.76  Fri Mar 9 7:14:42 2007
 	- Little bug correction
 	- Delete of DBI.pm which is not more in use
 
-0.75  Sat Feb 24 16:36:56
+0.75  Sat Feb 24 16:36:56 2007
 	- Adding cross-domain-authentication support
 	- local configuration overrides global configuration
 

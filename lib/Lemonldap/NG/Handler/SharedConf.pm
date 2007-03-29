@@ -67,10 +67,27 @@ sub run($$) {
     return $class->SUPER::run($r);
 }
 
+sub logout($$) {
+    my ( $class, $r ) = @_;
+    if ( time() - $lastReload > $reloadTime ) {
+        unless ( $class->localConfUpdate($r) == OK ) {
+            $class->lmLog( "$class: No configuration found", 'error' );
+            return SERVER_ERROR;
+        }
+    }
+    return $class->SUPER::logout($r);
+}
+
 sub confTest($$) {
     my ( $class, $args ) = @_;
     if ( $args->{_n_conf} ) {
-        return 1 if ( $args->{_n_conf} == $cfgNum or $childLock );
+        return 1 if ( $args->{_n_conf} == $cfgNum );
+        if( $childLock ) {
+            $class->lmLog( "$class: child $$ detects configuration but local "
+                         . 'storage is locked, continues to work with the old one',
+                           'debug' );
+            return 1;
+        }
         $childLock = 1;
         $class->globalInit($args);
         $childLock = 0;
@@ -116,6 +133,7 @@ sub setConf {
     $cfgNum++;
     $args->{_n_conf} = $cfgNum;
     $refLocalStorage->set( "conf", $args, $EXPIRES_NEVER );
+    $class->lmLog( "$class: store configuration " . $args->{cfgNum}, 'debug' );
     $class->globalInit($args);
 }
 
@@ -126,20 +144,22 @@ sub getConf {
         $class->lmLog( "$class: Unable to load configuration", 'error' );
         return SERVER_ERROR;
     }
+    $class->lmLog( "$class: get configuration " . $tmp->{cfgNum}, 'debug' );
     return $tmp;
 }
 
 sub refresh($$) {
     my ( $class, $r ) = @_;
-    $class->lmLog( "$class: request for configuration reload", 'info' );
+    $class->lmLog( "$class: request for configuration reload", 'notice' );
     $r->handler("perl-script");
+    my $perlHandler = (MP() ==2) ? 'PerlResponseHandler' : 'PerlHandler';
     if ( $class->globalConfUpdate($r) == OK ) {
-        $r->push_handlers( PerlHandler => sub { OK } );
+        $r->push_handlers( $perlHandler => sub { my $r = shift; $r->send_http_header; OK } );
     }
     else {
         $r->push_handlers( PerlHandler => sub { SERVER_ERROR } );
     }
-    return DONE;
+    return OK;
 }
 
 1;
@@ -230,7 +250,8 @@ local store.
 
 =head1 SEE ALSO
 
-L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Manager>, L<Lemonldap::NG::Portal>
+L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Manager>, L<Lemonldap::NG::Portal>,
+http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 
 =back
 

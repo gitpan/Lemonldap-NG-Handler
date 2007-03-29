@@ -2,7 +2,7 @@ package Lemonldap::NG::Handler;
 
 print STDERR
 "See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
-our $VERSION = "0.76";
+our $VERSION = "0.77";
 
 1;
 
@@ -68,6 +68,11 @@ You can also unprotect an URI
     PerlHeaderParserHandler My::Package->unprotect
   </Files>
 
+If your application has a "logout" URL, configure it:
+
+  <Location /logout>
+    PerlHeaderParserHandler My::Package->logout
+  </Location>
 
 =head1 DESCRIPTION
 
@@ -270,6 +275,26 @@ user each 10 minutes.
 Lemonldap::NG is very fast, but you can increase performance using a
 L<Cache::Cache> module that does not use disk access.
 
+=head2 Logout system
+
+Lemonldap::NG provides a single logout system: you can use it by adding a link
+to the portal with "logout=1" parameter in the portal (See
+L<Lemonldap::NG::Portal>) and/or by configuring handler to intercept some URL
+(See Sinopsys). The logout system:
+
+=over
+
+=item * delete session in the global session storage,
+
+=item * replace Lemonldap::NG cookie by '',
+
+=item * delete handler caches only if logout action was started from a
+protected application and only in the current Apache server. So in other
+servers, session is still in cache for 10 minutes maximum if the user was
+connected on it in the last 10 minutes.
+
+=back
+
 =head1 USING LEMONLDAP::NG::HANDLER FOR DEVELOPMENT
 
 Lemonldap::NG::Handler provides different modules:
@@ -300,7 +325,8 @@ download a mod_perl2 backport.
 =head1 SEE ALSO
 
 L<Lemonldap::NG::Handler::SharedConf>,
-L<Lemonldap::NG::Portal>, L<Lemonldap::NG::Manager>
+L<Lemonldap::NG::Portal>, L<Lemonldap::NG::Manager>,
+http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 
 =head1 AUTHOR
 
@@ -308,7 +334,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+Copyright (C) 2005-2007 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,

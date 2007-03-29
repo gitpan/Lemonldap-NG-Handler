@@ -106,7 +106,8 @@ Same as L<Lemonldap::NG::Handler::SharedConf>.
 =head1 SEE ALSO
 
 L<Lemonldap::NG::Manager>, L<Lemonldap::NG::Handler>,
-L<Lemonldap::NG::Handler::SharedConf>
+L<Lemonldap::NG::Handler::SharedConf>,
+http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 
 =head1 AUTHOR
 
