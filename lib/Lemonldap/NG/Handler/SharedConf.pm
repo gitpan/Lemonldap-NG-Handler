@@ -9,7 +9,7 @@ use Cache::Cache qw($EXPIRES_NEVER);
 
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.53';
+our $VERSION    = '0.54';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -32,9 +32,9 @@ BEGIN {
     }
     *EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
     *EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
-    push( @{ $EXPORT_TAGS{$_} }, qw($reloadTime $lastReload) )
+    push( @{ $EXPORT_TAGS{$_} }, qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig) )
       foreach (qw(variables localStorage));
-    push @EXPORT_OK, qw($reloadTime $lastReload);
+    push @EXPORT_OK, qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig);
 }
 
 # INIT PROCESS
@@ -258,6 +258,16 @@ http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 =head1 AUTHOR
 
 Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=head1 BUG REPORT
+
+Use OW2 system to report bug or ask for features:
+L<http://forge.objectweb.org/tracker/?group_id=274>
+
+=head1 DOWNLOAD
+
+Lemonldap::NG is available at
+L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 

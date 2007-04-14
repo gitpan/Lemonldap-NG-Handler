@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.8   Thu Apr 12 7:08:08 2007
+	- Little bug in unprotect function (Handler::Simple)
+	- New feature: Lemonldap::NG::Handler::CGI
+
 0.77  Wed Mar 22 7:18:48 2007
 	- logout system
 	- $date is now available in rules

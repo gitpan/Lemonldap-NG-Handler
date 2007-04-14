@@ -4,7 +4,7 @@ use strict;
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -15,7 +15,7 @@ sub run ($$) {
     my $class;
     ( $class, $apacheRequest ) = @_;
     my $args = $apacheRequest->args;
-    if ( $args =~ s/\??($cookieName=\w+)$//oi ) {
+    if ( $args =~ s/[\?&]?($cookieName=\w+)$//oi ) {
         my $str = $1;
         $class->lmLog(
             "Found a CDA id. Redirecting  "
@@ -112,6 +112,16 @@ http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 =head1 AUTHOR
 
 Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=head1 BUG REPORT
+
+Use OW2 system to report bug or ask for features:
+L<http://forge.objectweb.org/tracker/?group_id=274>
+
+=head1 DOWNLOAD
+
+Lemonldap::NG is available at
+L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 

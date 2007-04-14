@@ -4,7 +4,7 @@ use Lemonldap::NG::Handler::Simple qw(:locationRules :headers);
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.51';
+our $VERSION = '0.52';
 
 # TODO: split locationRules into 2 arrays
 sub locationRulesInit {
@@ -83,6 +83,7 @@ sub grant {
             "User rejected because VirtualHost \"$vhost\" has no configuration",
             'warn'
         );
+        return 0;
     }
     return &{ $defaultCondition->{$vhost} };
 }
@@ -143,6 +144,16 @@ http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 =head1 AUTHOR
 
 Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=head1 BUG REPORT
+
+Use OW2 system to report bug or ask for features:
+L<http://forge.objectweb.org/tracker/?group_id=274>
+
+=head1 DOWNLOAD
+
+Lemonldap::NG is available at
+L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 

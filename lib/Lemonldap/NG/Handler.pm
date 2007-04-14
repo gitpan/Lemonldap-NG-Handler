@@ -2,7 +2,7 @@ package Lemonldap::NG::Handler;
 
 print STDERR
 "See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
-our $VERSION = "0.77";
+our $VERSION = "0.8";
 
 1;
 
@@ -310,6 +310,10 @@ directly to protect a single host.
 configuration can be centralized. Inherits from
 L<Lemonldap::NG::Handler::Vhost> and L<Lemonldap::NG::Handler::Simple>.
 
+=item * L<Lemonldap::NG::Handler::CGI>: if you have only a few Perl CGI to
+protect, you can use this module in your CGI instead of protecting it under
+L<Lemonldap::NG::Handler::SharedConf>.
+
 =item * L<Lemonldap::NG::Handler::Proxy>: this module isn't used to manage
 security but is written to create a reverse-proxy without using mod_proxy. In
 some case, mod_proxy does not manage correctly some redirections, that is why
@@ -326,11 +330,21 @@ download a mod_perl2 backport.
 
 L<Lemonldap::NG::Handler::SharedConf>,
 L<Lemonldap::NG::Portal>, L<Lemonldap::NG::Manager>,
-http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
+L<http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation>
 
 =head1 AUTHOR
 
 Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=head1 BUG REPORT
+
+Use OW2 system to report bug or ask for features:
+L<http://forge.objectweb.org/tracker/?group_id=274>
+
+=head1 DOWNLOAD
+
+Lemonldap::NG is available at
+L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 

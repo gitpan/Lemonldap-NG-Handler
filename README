@@ -29,7 +29,7 @@ The Apache module part (Lemonldap::NG::Handler) works both with Apache 1.3.x
 and 2.x ie mod_perl 1 and 2 (but not with mod_perl 1.99). Portal and Manager
 act as CGI, so they can work everywhere.
 
-See INSTALL file in the whole source tree of Leonldap::NG for a complete
+See INSTALL file in the whole source tree of Lemonldap::NG for a complete
 installation documentation.
 
 To install this module type the following:

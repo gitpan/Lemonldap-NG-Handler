@@ -7,7 +7,7 @@ use Exporter 'import';
 use Safe;
 require POSIX;
 
-our $VERSION = '0.75';
+our $VERSION = '0.8';
 
 our %EXPORT_TAGS = (
     localStorage =>
@@ -16,7 +16,7 @@ our %EXPORT_TAGS = (
     locationRules => [
         qw(
           $locationCondition $defaultCondition $locationCount
-          $locationRegexp $apacheRequest $datas $safe
+          $locationRegexp $apacheRequest $datas $safe $portal
           )
     ],
     import  => [ qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS ) ],
@@ -35,7 +35,7 @@ our %EXPORT_TAGS = (
     ],
     traces => [ qw( $whatToTrace ) ],
     apache =>
-      [ qw( MP lmLog OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR ) ],
+      [ qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR ) ],
 );
 
 our @EXPORT_OK = ();
@@ -116,14 +116,14 @@ BEGIN {
         Apache::Constants->import(':common');
         Apache::Constants->import(':response');
     }
-    else {    # For Test only
+    else {    # For Test or CGI
         eval '
+            sub OK {0}
             sub FORBIDDEN {1}
-            sub REDIRECT {1}
-            sub OK {1}
+            sub REDIRECT {2}
             sub DECLINED {1}
-            sub DONE {1}
-            sub SERVER_ERROR {1}
+            sub DONE {4}
+            sub SERVER_ERROR {5}
         ';
     }
     *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
@@ -135,13 +135,16 @@ sub handler_mp2 : method {
     shift->run(@_);
 }
 
-sub lmLog($$$) {
+sub lmLog {
     my ( $class, $mess, $level ) = @_;
     if ( MP() == 2 ) {
         Apache2::ServerRec->log->$level($mess);
     }
-    else {
+    elsif ( MP() == 1 ) {
         Apache->server->log->$level($mess);
+    }
+    else {
+        print STDERR "$mess\n";
     }
 }
 
@@ -156,7 +159,7 @@ sub lmSetHeaderIn {
     if ( MP() == 2 ) {
         return $r->headers_in->set( $h => $v );
     }
-    else {
+    elsif ( MP() == 1 ) {
         return $r->header_in( $h => $v );
     }
 }
@@ -166,7 +169,7 @@ sub lmHeaderIn {
     if ( MP() == 2 ) {
         return $r->headers_in->{$h};
     }
-    else {
+    elsif ( MP() == 1 ) {
         return $r->header_in($h);
     }
 }
@@ -176,7 +179,7 @@ sub lmSetErrHeaderOut {
     if ( MP() == 2 ) {
         return $r->err_headers_out->set( $h => $v );
     }
-    else {
+    elsif ( MP() == 1 ) {
         return $r->err_header_out( $h => $v );
     }
 }
@@ -186,7 +189,7 @@ sub lmSetHeaderOut {
     if ( MP() == 2 ) {
         return $r->headers_out->set( $h => $v );
     }
-    else {
+    elsif ( MP() == 1 ) {
         return $r->header_out( $h => $v );
     }
 }
@@ -196,7 +199,7 @@ sub lmHeaderOut {
     if ( MP() == 2 ) {
         return $r->headers_out->{$h};
     }
-    else {
+    elsif ( MP() == 1 ) {
         return $r->header_out($h);
     }
 }
@@ -258,7 +261,7 @@ sub localInit($$) {
             PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); }
         );
     }
-    else {
+    elsif ( MP() == 1 ) {
         Apache->push_handlers(
             PerlChildInitHandler => sub { return $class->initLocalStorage(@_); }
         );
@@ -535,7 +538,7 @@ sub cleanLocalStorage {
 }
 
 sub unprotect {
-    DONE;
+    OK;
 }
 
 sub logout ($$) {
@@ -737,6 +740,16 @@ http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
 =head1 AUTHOR
 
 Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=head1 BUG REPORT
+
+Use OW2 system to report bug or ask for features:
+L<http://forge.objectweb.org/tracker/?group_id=274>
+
+=head1 DOWNLOAD
+
+Lemonldap::NG is available at
+L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 
