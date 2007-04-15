@@ -29,6 +29,7 @@ sub locationRulesInit {
         $defaultCondition->{$vhost} = $class->conditionSub('accept')
           unless ( $defaultCondition->{$vhost} );
     }
+    1;
 }
 
 sub forgeHeadersInit {
@@ -56,6 +57,7 @@ sub forgeHeadersInit {
             'error' )
           if ($@);
     }
+    1;
 }
 
 sub sendHeaders {

@@ -7,7 +7,7 @@ use Exporter 'import';
 use Safe;
 require POSIX;
 
-our $VERSION = '0.8';
+our $VERSION = '0.81';
 
 our %EXPORT_TAGS = (
     localStorage =>
@@ -231,7 +231,7 @@ sub localInit($$) {
         $localStorageOptions->{default_expires_in} ||= 600;
 
         eval "use $localStorage;";
-        die("Unable to load $localStorage") if ($@);
+        die("Unable to load $localStorage: $@") if ($@);
 
         # At each Apache (re)start, we've to clear the cache to avoid living
         # with old datas
@@ -269,6 +269,7 @@ sub localInit($$) {
             PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); }
         );
     }
+    1;
 }
 
 # Global initialization process :
@@ -308,6 +309,7 @@ sub locationRulesInit {
     # Default police: all authenticated users are accepted
     $defaultCondition = $class->conditionSub('accept')
       unless ($defaultCondition);
+    1;
 }
 
 # conditionSub returns a pre-compiled subroutine used to grant users (used by
@@ -336,6 +338,7 @@ sub defaultValuesInit {
     $whatToTrace =~ s/\$//g;
     $https = $args->{https} unless defined($https);
     $https = 1 unless defined($https);
+    1;
 }
 
 # portalInit : verify that portal variable exists
@@ -385,6 +388,7 @@ sub forgeHeadersInit {
     $forgeHeaders = $safe->reval("sub {$sub};");
     $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' )
       if ($@);
+    1;
 }
 
 ################

@@ -10,13 +10,14 @@ our @ISA = qw(CGI);
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new();
     $self->{_handler} = bless {}, 'Lemonldap::NG::Handler::_CGI';
     $self->_handler->init( @_ );
+    $self->initLocalStorage();
     die "Unable to get configuration" unless $self->_handler->localConfUpdate() == OK;
     return $self;
 }
