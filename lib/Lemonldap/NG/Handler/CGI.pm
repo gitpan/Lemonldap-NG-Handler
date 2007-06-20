@@ -17,7 +17,7 @@ sub new {
     my $self  = $class->SUPER::new();
     $self->{_handler} = bless {}, 'Lemonldap::NG::Handler::_CGI';
     $self->_handler->init( @_ );
-    $self->initLocalStorage();
+    $self->_handler->initLocalStorage();
     die "Unable to get configuration" unless $self->_handler->localConfUpdate() == OK;
     return $self;
 }
@@ -108,6 +108,7 @@ sub grant {
 
 1;
 __END__
+
 =head1 NAME
 
 Lemonldap::NG::Handler::CGI - Perl extension for using Lemonldap::NG

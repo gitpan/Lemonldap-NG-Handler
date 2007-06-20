@@ -4,12 +4,12 @@ use strict;
 
 use Lemonldap::NG::Handler::Simple qw(:all);
 use Lemonldap::NG::Handler::Vhost;
-use Lemonldap::NG::Manager;
+use Lemonldap::NG::Manager::Conf;
 use Cache::Cache qw($EXPIRES_NEVER);
 
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.54';
+our $VERSION    = '0.55';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -233,7 +233,7 @@ with the C<reloadTime> parameter (default 600s).
 
 =head3 getConf
 
-Call Lemonldap::NG::Manager::Conf qith the configStorage parameter.
+Call Lemonldap::NG::Manager::Conf with the configStorage parameter.
 
 =head1 OPERATION
 
@@ -252,8 +252,6 @@ local store.
 
 L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Manager>, L<Lemonldap::NG::Portal>,
 http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
-
-=back
 
 =head1 AUTHOR
 

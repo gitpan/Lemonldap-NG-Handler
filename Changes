@@ -1,5 +1,11 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.82  Fri Jun 1 6:52:43 2007
+	- Little bug: SharedConf.pm needs Manager::Conf and not Manager
+
+0.81  Fri Apr 15 7:15:56 2007
+	- More tests
+
 0.8   Thu Apr 12 7:08:08 2007
 	- Little bug in unprotect function (Handler::Simple)
 	- New feature: Lemonldap::NG::Handler::CGI

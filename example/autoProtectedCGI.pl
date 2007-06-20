@@ -8,7 +8,7 @@ my $cgi = new Lemonldap::NG::Handler::CGI ( {
     },
     configStorage       => {
         type                 => 'File',
-        dirName              => '__DIR__/conf',
+        dirName              => '__CONFDIR__',
     },
     https => 0,
   }

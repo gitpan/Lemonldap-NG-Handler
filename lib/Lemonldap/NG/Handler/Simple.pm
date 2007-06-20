@@ -332,9 +332,9 @@ sub defaultValuesInit {
     my ( $class, $args ) = @_;
 
     # Other values
-    $cookieName  = $args->{cookieName}  || 'lemonldap';
-    $cookieSecured = $args->{cookieSecured}  || 0;
-    $whatToTrace = $args->{whatToTrace} || '$uid';
+    $cookieName    = $args->{cookieName}    || 'lemonldap';
+    $cookieSecured = $args->{cookieSecured} || 0;
+    $whatToTrace   = $args->{whatToTrace}   || '$uid';
     $whatToTrace =~ s/\$//g;
     $https = $args->{https} unless defined($https);
     $https = 1 unless defined($https);
@@ -417,7 +417,7 @@ sub forbidden {
     return FORBIDDEN;
 }
 
-# hideCookie : hide Lemonldap cookie to the protected application
+# hideCookie : hide Lemonldap::NG cookie to the protected application
 sub hideCookie {
     my $class = shift;
     $class->lmLog( "$class: removing cookie", 'debug' );
@@ -429,12 +429,18 @@ sub hideCookie {
 # Redirect non-authenticated users to the portal
 sub goToPortal() {
     my ( $class, $url, $arg ) = @_;
+    my $port = $apacheRequest->get_server_port();
+    $port =
+        (  $https && $port == 443 ) ? ''
+      : ( !$https && $port == 80 )  ? ''
+      :                               ':' . $apacheRequest->get_server_port();
     my $urlc_init =
       encode_base64( "http"
           . ( $https ? "s" : "" ) . "://"
           . $apacheRequest->get_server_name()
+          . $port
           . $url );
-    $urlc_init =~ s/[\n\s]//g;
+    $urlc_init =~ s/[\n\s]//sg;
     $class->lmLog(
         "Redirect "
           . $apacheRequest->connection->remote_ip
@@ -499,7 +505,7 @@ sub run ($$) {
 
     # ACCOUNTING
     # 1 - Inform Apache
-    $apacheRequest->connection->user( $datas->{$whatToTrace} );
+    $apacheRequest->connection->user( $datas->{$whatToTrace} ) if( $datas->{$whatToTrace} );
 
     # AUTHORIZATION
     return $class->forbidden($uri) unless ( $class->grant($uri) );
@@ -515,7 +521,7 @@ sub run ($$) {
     $class->sendHeaders;
 
     # SECURITY
-    # Hide Lemonldap cookie
+    # Hide Lemonldap::NG cookie
     $class->hideCookie;
     OK;
 }
@@ -689,7 +695,7 @@ method itself.
 
 =item B<cookieName> (default: lemon)
 
-Name of the cookie used by the Lemonldap infrastructure.
+Name of the cookie used by the Lemonldap::NG infrastructure.
 
 =item B<portal> (required)
 
