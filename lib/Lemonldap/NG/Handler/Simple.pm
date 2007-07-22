@@ -7,7 +7,7 @@ use Exporter 'import';
 use Safe;
 require POSIX;
 
-our $VERSION = '0.81';
+our $VERSION = '0.83';
 
 our %EXPORT_TAGS = (
     localStorage =>
@@ -17,6 +17,7 @@ our %EXPORT_TAGS = (
         qw(
           $locationCondition $defaultCondition $locationCount
           $locationRegexp $apacheRequest $datas $safe $portal
+          $logout
           )
     ],
     import  => [ qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS ) ],
@@ -55,6 +56,7 @@ our (
     $globalStorage,       $globalStorageOptions, $localStorage,
     $localStorageOptions, $whatToTrace,          $https,
     $refLocalStorage,     $safe,                 $cookieSecured,
+    $logout,
 );
 
 ##########################################
@@ -127,13 +129,14 @@ BEGIN {
         ';
     }
     *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
+    *logout = ( MP() == 2 ) ? \&logout_mp2 : \&logout_mp1;
 }
 
 sub handler_mp1 ($$) { shift->run(@_) }
+sub handler_mp2 : method { shift->run(@_); }
 
-sub handler_mp2 : method {
-    shift->run(@_);
-}
+sub logout_mp1 ($$) { shift->unlog(@_) }
+sub logout_mp2 : method { shift->unlog(@_); }
 
 sub lmLog {
     my ( $class, $mess, $level ) = @_;
@@ -320,6 +323,36 @@ sub conditionSub {
       if ( $cond =~ /^accept$/i );
     return sub { 0 }
       if ( $cond =~ /^deny$/i );
+    if ( $cond =~ /^logout(?:_sso)?(?:\s+(.*))?$/i ) {
+        my $url = $1 || $class->encodeUrl ( "/" );
+        return sub { $logout = $url; return 0 }
+    }
+    if( MP() == 2 ) {
+        if ( $cond =~ /^logout_app(?:\s+(.*))?$/i ) {
+            my $u = $1;
+            eval 'use Apache2::Filter' unless($INC{"Apache2/Filter.pm"});
+            return sub {
+                $apacheRequest->add_output_filter(sub {
+                        return $class->redirectFilter( $u, @_ );
+                    }
+                );
+                1;
+            };
+        }
+        elsif ( $cond =~ /^logout_app_sso(?:\s+(.*))?$/i ) {
+            eval 'use Apache2::Filter' unless($INC{"Apache2/Filter.pm"});
+            my $u = encode_base64($1);
+            $u =~ s/[\r\n]//g;
+            return sub {
+                $class->localUnlog;
+                $apacheRequest->add_output_filter(sub {
+                        return $class->redirectFilter( "$portal?url=$u&logout=1", @_ );
+                    }
+                );
+                1;
+            };
+        }
+    }
     $cond =~ s/\$date/&POSIX::strftime("%Y%m%d%H%M%S",localtime())/e;
     $cond =~ s/\$(\w+)/\$datas->{$1}/g;
     my $sub;
@@ -408,8 +441,12 @@ sub grant {
 # forbidden : used to reject non authorizated requests
 sub forbidden {
     my $class = shift;
-
-    # We use Apache::Log here
+    if( $logout ) {
+        $apacheRequest->headers_out->set(
+                'Location' => "$portal?url=$logout"
+        );
+        return REDIRECT;
+    }
     $class->lmLog(
         'The user "' . $datas->{$whatToTrace} . '" was reject when he tried to access to ' . shift,
         'notice'
@@ -426,27 +463,33 @@ sub hideCookie {
     lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
 }
 
-# Redirect non-authenticated users to the portal
-sub goToPortal() {
-    my ( $class, $url, $arg ) = @_;
+sub encodeUrl {
+    my ( $class, $url ) = @_;
     my $port = $apacheRequest->get_server_port();
     $port =
         (  $https && $port == 443 ) ? ''
       : ( !$https && $port == 80 )  ? ''
       :                               ':' . $apacheRequest->get_server_port();
-    my $urlc_init =
+    my $u =
       encode_base64( "http"
           . ( $https ? "s" : "" ) . "://"
           . $apacheRequest->get_server_name()
           . $port
           . $url );
-    $urlc_init =~ s/[\n\s]//sg;
+    $u =~ s/[\r\n\s]//sg;
+    return $u;
+}
+
+# Redirect non-authenticated users to the portal
+sub goToPortal() {
+    my ( $class, $url, $arg ) = @_;
     $class->lmLog(
         "Redirect "
           . $apacheRequest->connection->remote_ip
           . " to portal (url was $url)",
         'debug'
     );
+    my $urlc_init = $class->encodeUrl ( $url );
     $apacheRequest->headers_out->set(
         'Location' => "$portal?url=$urlc_init" . ( $arg ? "&$arg" : "" )
     );
@@ -551,9 +594,8 @@ sub unprotect {
     OK;
 }
 
-sub logout ($$) {
-    my $class;
-    ($class, $apacheRequest ) = @_;
+sub localUnlog {
+    my $class = shift;
     if( my $id = $class->fetchId ) {
         # Delete Apache thread datas
         if ( $id eq $datas->{_session_id} ) {
@@ -564,7 +606,29 @@ sub logout ($$) {
             $refLocalStorage->remove($id);
         }
     }
+}
+
+sub unlog ($$) {
+    my $class;
+    $logout = 0;
+    ($class, $apacheRequest ) = @_;
+    $class->localUnlog;
     return $class->goToPortal( '/', 'logout=1' );
+}
+
+sub redirectFilter {
+    my $class = shift;
+    my $url   = shift;
+    my $f     = shift;
+    unless ($f->ctx) {
+        $f->r->status(REDIRECT);
+        $f->r->status_line("302 Temporary Moved");
+        $f->r->err_headers_out->set('Location' => $url);
+        $f->ctx(1);
+    }
+    while ($f->read(my $buffer, 1024)) {
+    }
+    return REDIRECT;
 }
 
 1;

@@ -14,9 +14,9 @@ Makefile.PL
 MANIFEST
 META.yml			Module meta-data (added by MakeMaker)
 README
-t/Lemonldap-NG-Handler-CDA.t
-t/Lemonldap-NG-Handler-CGI.t
-t/Lemonldap-NG-Handler-Proxy.t
-t/Lemonldap-NG-Handler-SharedConf.t
-t/Lemonldap-NG-Handler-Simple.t
-t/Lemonldap-NG-Handler-Vhost.t
+t/01-Lemonldap-NG-Handler-Simple.t
+t/05-Lemonldap-NG-Handler-Vhost.t
+t/10-Lemonldap-NG-Handler-SharedConf.t
+t/20-Lemonldap-NG-Handler-CDA.t
+t/30-Lemonldap-NG-Handler-CGI.t
+t/40-Lemonldap-NG-Handler-Proxy.t

@@ -2,7 +2,7 @@ package Lemonldap::NG::Handler;
 
 print STDERR
 "See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
-our $VERSION = "0.82";
+our $VERSION = "0.83";
 
 1;
 
@@ -68,7 +68,8 @@ You can also unprotect an URI
     PerlHeaderParserHandler My::Package->unprotect
   </Files>
 
-If your application has a "logout" URL, configure it:
+If your application has a "logout" URL, you can configure it directly in Apache
+configuration file (or in the manager interface) :
 
   <Location /logout>
     PerlHeaderParserHandler My::Package->logout
@@ -294,6 +295,9 @@ servers, session is still in cache for 10 minutes maximum if the user was
 connected on it in the last 10 minutes.
 
 =back
+
+You can also configure rules in the Manager interface to intercept logout URL.
+See L<Lemonldap::NG::Manager> and L<Lemonldap::NG::Handler> for more.
 
 =head1 USING LEMONLDAP::NG::HANDLER FOR DEVELOPMENT
 

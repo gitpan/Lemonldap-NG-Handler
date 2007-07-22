@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.83  Sun Jul 22 22:19:12 2007
+	- New logout system : URL can now be declared in Manager
+	  interface
+
 0.82  Fri Jun 1 6:52:43 2007
 	- Little bug: SharedConf.pm needs Manager::Conf and not Manager
 

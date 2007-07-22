@@ -196,7 +196,8 @@ Cache::Cache module that does not use disk access.
 Lemonldap::NG provides a single logout system: you can use it by adding a link
 to the portal with "logout=1" parameter in the portal (See
 Lemonldap::NG::Portal) and/or by configuring handler to intercept some URL
-(See Lemonldap::NG::Handler). The logout system:
+(See Lemonldap::NG::Handler) directly in the manager interface or in apache
+configuration file. The logout system:
  * delete session in the global session storage,
  * replace Lemonldap::NG cookie by '',
  * delete handler caches only if logout action was started from a protected
