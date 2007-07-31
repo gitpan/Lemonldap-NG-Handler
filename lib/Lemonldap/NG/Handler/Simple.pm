@@ -7,7 +7,7 @@ use Exporter 'import';
 use Safe;
 require POSIX;
 
-our $VERSION = '0.83';
+our $VERSION = '0.84';
 
 our %EXPORT_TAGS = (
     localStorage =>
@@ -23,15 +23,9 @@ our %EXPORT_TAGS = (
     import  => [ qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS ) ],
     headers => [
         qw(
-          $forgeHeaders
-          lmHeaderIn
-          lmSetHeaderIn
-          lmHeaderOut
-          lmSetHeaderOut
-          lmSetErrHeaderOut
-          $cookieName
-          $cookieSecured
-          $https
+          $forgeHeaders lmHeaderIn lmSetHeaderIn lmHeaderOut
+          lmSetHeaderOut lmSetErrHeaderOut $cookieName $cookieSecured
+          $https $port
           )
     ],
     traces => [ qw( $whatToTrace ) ],
@@ -56,7 +50,7 @@ our (
     $globalStorage,       $globalStorageOptions, $localStorage,
     $localStorageOptions, $whatToTrace,          $https,
     $refLocalStorage,     $safe,                 $cookieSecured,
-    $logout,
+    $logout,              $port
 );
 
 ##########################################
@@ -78,12 +72,8 @@ BEGIN {
     if ( MP() == 2 ) {
         require Apache2::RequestRec;
         Apache2::RequestRec->import();
-
-        #require Apache2::RequestIO;
         require Apache2::Log;
         require Apache2::Const;
-
-        #Apache2::Const->import('-compile', 'FORBIDDEN');
         Apache2::Const->import( '-compile', qw(:common :log) );
         *FORBIDDEN    = \&Apache2::Const::FORBIDDEN;
         *REDIRECT     = \&Apache2::Const::REDIRECT;
@@ -108,6 +98,7 @@ BEGIN {
             threads::shared::share($localStorageOptions);
             threads::shared::share($whatToTrace);
             threads::shared::share($https);
+            threads::shared::share($port);
             threads::shared::share($refLocalStorage);
         };
     }
@@ -369,8 +360,8 @@ sub defaultValuesInit {
     $cookieSecured = $args->{cookieSecured} || 0;
     $whatToTrace   = $args->{whatToTrace}   || '$uid';
     $whatToTrace =~ s/\$//g;
-    $https = $args->{https} unless defined($https);
-    $https = 1 unless defined($https);
+    $https = $args->{https} || 1 unless defined($https);
+    $port = $args->{port} || 0 unless defined($port);
     1;
 }
 
@@ -465,16 +456,16 @@ sub hideCookie {
 
 sub encodeUrl {
     my ( $class, $url ) = @_;
-    my $port = $apacheRequest->get_server_port();
-    $port =
+    my $portString = $port || $apacheRequest->get_server_port();
+    $portString =
         (  $https && $port == 443 ) ? ''
       : ( !$https && $port == 80 )  ? ''
-      :                               ':' . $apacheRequest->get_server_port();
+      :                               ':' . $portString;
     my $u =
       encode_base64( "http"
           . ( $https ? "s" : "" ) . "://"
           . $apacheRequest->get_server_name()
-          . $port
+          . $portString
           . $url );
     $u =~ s/[\r\n\s]//sg;
     return $u;
@@ -780,6 +771,10 @@ values resulting from the global session store.
 Indicates if the protected server is protected by SSL. It is used to build
 redirections, so you have to set it to avoid bad redirections after
 authentication.
+
+=item B<port> (default: undef)
+
+If port is not well defined in redirection, you can fix listen port here.
 
 =back
 

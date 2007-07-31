@@ -1,5 +1,8 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.84  Mon Jul 30 21:26:19 2007
+	- New parameter to fix port in redirections.
+
 0.83  Sun Jul 22 22:19:12 2007
 	- New logout system : URL can now be declared in Manager
 	  interface
