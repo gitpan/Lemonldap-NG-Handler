@@ -7,7 +7,7 @@ use Exporter 'import';
 use Safe;
 require POSIX;
 
-our $VERSION = '0.84';
+our $VERSION = '0.85';
 
 our %EXPORT_TAGS = (
     localStorage =>
@@ -360,7 +360,8 @@ sub defaultValuesInit {
     $cookieSecured = $args->{cookieSecured} || 0;
     $whatToTrace   = $args->{whatToTrace}   || '$uid';
     $whatToTrace =~ s/\$//g;
-    $https = $args->{https} || 1 unless defined($https);
+    $https = $args->{https} unless defined($https);
+    $https = 1 unless defined($https);
     $port = $args->{port} || 0 unless defined($port);
     1;
 }
@@ -458,8 +459,8 @@ sub encodeUrl {
     my ( $class, $url ) = @_;
     my $portString = $port || $apacheRequest->get_server_port();
     $portString =
-        (  $https && $port == 443 ) ? ''
-      : ( !$https && $port == 80 )  ? ''
+        (  $https && $portString == 443 ) ? ''
+      : ( !$https && $portString == 80 )  ? ''
       :                               ':' . $portString;
     my $u =
       encode_base64( "http"
@@ -481,9 +482,7 @@ sub goToPortal() {
         'debug'
     );
     my $urlc_init = $class->encodeUrl ( $url );
-    $apacheRequest->headers_out->set(
-        'Location' => "$portal?url=$urlc_init" . ( $arg ? "&$arg" : "" )
-    );
+    lmSetHeaderOut( $apacheRequest, 'Location' => "$portal?url=$urlc_init" . ( $arg ? "&$arg" : "" ) );
     return REDIRECT;
 }
 

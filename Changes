@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.85  Fri feb 8 17:50:25 2008
+	- local overload was not taken in account
+	- little bugs in redirections
+
 0.84  Mon Jul 30 21:26:19 2007
 	- New parameter to fix port in redirections.
 
