@@ -7,40 +7,13 @@ use Exporter 'import';
 use Safe;
 require POSIX;
 
-our $VERSION = '0.85';
+our $VERSION = '0.86';
 
-our %EXPORT_TAGS = (
-    localStorage =>
-      [ qw( $localStorage $localStorageOptions $refLocalStorage ) ],
-    globalStorage => [ qw( $globalStorage $globalStorageOptions ) ],
-    locationRules => [
-        qw(
-          $locationCondition $defaultCondition $locationCount
-          $locationRegexp $apacheRequest $datas $safe $portal
-          $logout
-          )
-    ],
-    import  => [ qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS ) ],
-    headers => [
-        qw(
-          $forgeHeaders lmHeaderIn lmSetHeaderIn lmHeaderOut
-          lmSetHeaderOut lmSetErrHeaderOut $cookieName $cookieSecured
-          $https $port
-          )
-    ],
-    traces => [ qw( $whatToTrace ) ],
-    apache =>
-      [ qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR ) ],
-);
+our %EXPORT_TAGS;
 
-our @EXPORT_OK = ();
-push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } )
-  foreach (
-    qw( localStorage globalStorage locationRules import headers traces apache )
-  );
-$EXPORT_TAGS{all} = \@EXPORT_OK;
+our @EXPORT_OK;
 
-our @EXPORT = ();
+our @EXPORT;
 
 # Shared variables
 our (
@@ -50,7 +23,7 @@ our (
     $globalStorage,       $globalStorageOptions, $localStorage,
     $localStorageOptions, $whatToTrace,          $https,
     $refLocalStorage,     $safe,                 $cookieSecured,
-    $logout,              $port
+    $port
 );
 
 ##########################################
@@ -58,6 +31,29 @@ our (
 ##########################################
 
 BEGIN {
+    %EXPORT_TAGS = (
+        localStorage  => [qw( $localStorage $localStorageOptions $refLocalStorage )],
+        globalStorage => [qw( $globalStorage $globalStorageOptions )],
+        locationRules => [
+            qw(
+              $locationCondition $defaultCondition $locationCount
+              $locationRegexp $apacheRequest $datas $safe $portal
+              )
+        ],
+        import  => [qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS )],
+        headers => [
+            qw(
+              $forgeHeaders lmHeaderIn lmSetHeaderIn lmHeaderOut
+              lmSetHeaderOut lmSetErrHeaderOut $cookieName $cookieSecured
+              $https $port
+              )
+        ],
+        log    => [qw( lmLog )],
+        traces => [qw( $whatToTrace )],
+        apache => [qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR )],
+    );
+    push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach ( keys %EXPORT_TAGS );
+    $EXPORT_TAGS{all} = \@EXPORT_OK;
     if ( exists $ENV{MOD_PERL} ) {
         if ( $ENV{MOD_PERL_API_VERSION} and $ENV{MOD_PERL_API_VERSION} >= 2 ) {
             *MP = sub { 2 };
@@ -120,13 +116,15 @@ BEGIN {
         ';
     }
     *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
-    *logout = ( MP() == 2 ) ? \&logout_mp2 : \&logout_mp1;
+    *logout  = ( MP() == 2 ) ? \&logout_mp2  : \&logout_mp1;
 }
 
-sub handler_mp1 ($$) { shift->run(@_) }
+sub handler_mp1 ($$) { shift->run(@_); }
+
 sub handler_mp2 : method { shift->run(@_); }
 
-sub logout_mp1 ($$) { shift->unlog(@_) }
+sub logout_mp1 ($$) { shift->unlog(@_); }
+
 sub logout_mp2 : method { shift->unlog(@_); }
 
 sub lmLog {
@@ -314,16 +312,17 @@ sub conditionSub {
       if ( $cond =~ /^accept$/i );
     return sub { 0 }
       if ( $cond =~ /^deny$/i );
-    if ( $cond =~ /^logout(?:_sso)?(?:\s+(.*))?$/i ) {
-        my $url = $1 || $class->encodeUrl ( "/" );
-        return sub { $logout = $url; return 0 }
+    if ( $cond =~ /^logout(?:_sso)?(?:\s+(.*))$/i ) {
+        my $url = $1;
+        return sub { $datas->{_logout} = $url; return 0 }
     }
-    if( MP() == 2 ) {
+    if ( MP() == 2 ) {
         if ( $cond =~ /^logout_app(?:\s+(.*))?$/i ) {
             my $u = $1;
-            eval 'use Apache2::Filter' unless($INC{"Apache2/Filter.pm"});
+            eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
             return sub {
-                $apacheRequest->add_output_filter(sub {
+                $apacheRequest->add_output_filter(
+                    sub {
                         return $class->redirectFilter( $u, @_ );
                     }
                 );
@@ -331,13 +330,18 @@ sub conditionSub {
             };
         }
         elsif ( $cond =~ /^logout_app_sso(?:\s+(.*))?$/i ) {
-            eval 'use Apache2::Filter' unless($INC{"Apache2/Filter.pm"});
-            my $u = encode_base64($1);
-            $u =~ s/[\r\n]//g;
+            eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
+            my $u = $1;
             return sub {
                 $class->localUnlog;
-                $apacheRequest->add_output_filter(sub {
-                        return $class->redirectFilter( "$portal?url=$u&logout=1", @_ );
+                $apacheRequest->add_output_filter(
+                    sub {
+                        return $class->redirectFilter(
+                            "$portal?url="
+                              . $class->encodeUrl($u)
+                              . "&logout=1",
+                            @_
+                        );
                     }
                 );
                 1;
@@ -433,14 +437,14 @@ sub grant {
 # forbidden : used to reject non authorizated requests
 sub forbidden {
     my $class = shift;
-    if( $logout ) {
-        $apacheRequest->headers_out->set(
-                'Location' => "$portal?url=$logout"
-        );
-        return REDIRECT;
+    if ( $datas->{_logout} ) {
+        return $class->goToPortal( $datas->{_logout}, 'logout=1' );
     }
     $class->lmLog(
-        'The user "' . $datas->{$whatToTrace} . '" was reject when he tried to access to ' . shift,
+        'The user "'
+          . $datas->{$whatToTrace}
+          . '" was reject when he tried to access to '
+          . shift,
         'notice'
     );
     return FORBIDDEN;
@@ -457,17 +461,20 @@ sub hideCookie {
 
 sub encodeUrl {
     my ( $class, $url ) = @_;
-    my $portString = $port || $apacheRequest->get_server_port();
-    $portString =
-        (  $https && $portString == 443 ) ? ''
-      : ( !$https && $portString == 80 )  ? ''
-      :                               ':' . $portString;
-    my $u =
-      encode_base64( "http"
+    my $u = $url;
+    if ( $url !~ m#^https?://# ) {
+        my $portString = $port || $apacheRequest->get_server_port();
+        $portString =
+            ( $https  && $portString == 443 ) ? ''
+          : ( !$https && $portString == 80 )  ? ''
+          :                                     ':' . $portString;
+        $u = "http"
           . ( $https ? "s" : "" ) . "://"
           . $apacheRequest->get_server_name()
           . $portString
-          . $url );
+          . $url;
+    }
+    $u = encode_base64($u);
     $u =~ s/[\r\n\s]//sg;
     return $u;
 }
@@ -481,15 +488,16 @@ sub goToPortal() {
           . " to portal (url was $url)",
         'debug'
     );
-    my $urlc_init = $class->encodeUrl ( $url );
-    lmSetHeaderOut( $apacheRequest, 'Location' => "$portal?url=$urlc_init" . ( $arg ? "&$arg" : "" ) );
+    my $urlc_init = $class->encodeUrl($url);
+    lmSetHeaderOut( $apacheRequest,
+        'Location' => "$portal?url=$urlc_init" . ( $arg ? "&$arg" : "" ) );
     return REDIRECT;
 }
 
 # Fetch $id
 sub fetchId() {
     my $t = lmHeaderIn( $apacheRequest, 'Cookie' );
-    return ($t =~ /$cookieName=([^; ]+);?/o ) ? $1: 0;
+    return ( $t =~ /$cookieName=([^; ]+);?/o ) ? $1 : 0;
 }
 
 # MAIN SUBROUTINE called by Apache (using PerlHeaderParserHandler option)
@@ -538,7 +546,8 @@ sub run ($$) {
 
     # ACCOUNTING
     # 1 - Inform Apache
-    $apacheRequest->connection->user( $datas->{$whatToTrace} ) if( $datas->{$whatToTrace} );
+    $apacheRequest->connection->user( $datas->{$whatToTrace} )
+      if ( $datas->{$whatToTrace} );
 
     # AUTHORIZATION
     return $class->forbidden($uri) unless ( $class->grant($uri) );
@@ -586,13 +595,13 @@ sub unprotect {
 
 sub localUnlog {
     my $class = shift;
-    if( my $id = $class->fetchId ) {
+    if ( my $id = $class->fetchId ) {
         # Delete Apache thread datas
         if ( $id eq $datas->{_session_id} ) {
             $datas = {};
         }
         # Delete Apache local cache
-        if( $refLocalStorage and $refLocalStorage->get($id) ) {
+        if ( $refLocalStorage and $refLocalStorage->get($id) ) {
             $refLocalStorage->remove($id);
         }
     }
@@ -600,8 +609,7 @@ sub localUnlog {
 
 sub unlog ($$) {
     my $class;
-    $logout = 0;
-    ($class, $apacheRequest ) = @_;
+    ( $class, $apacheRequest ) = @_;
     $class->localUnlog;
     return $class->goToPortal( '/', 'logout=1' );
 }
@@ -610,13 +618,15 @@ sub redirectFilter {
     my $class = shift;
     my $url   = shift;
     my $f     = shift;
-    unless ($f->ctx) {
+    unless ( $f->ctx ) {
+        # Here, we can use Apache2 functions instead of lmSetHeaderOut because
+        # this function is used only with Apache2.
         $f->r->status(REDIRECT);
         $f->r->status_line("302 Temporary Moved");
-        $f->r->err_headers_out->set('Location' => $url);
+        $f->r->err_headers_out->set( 'Location' => $url );
         $f->ctx(1);
     }
-    while ($f->read(my $buffer, 1024)) {
+    while ( $f->read( my $buffer, 1024 ) ) {
     }
     return REDIRECT;
 }

@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.86  Mon apr 7 14:52:30 2008
+	- logout bug : logout_sso target was not running (Closes: #308856 /
+	  forge.objectweb.org)
+
 0.85  Fri feb 8 17:50:25 2008
 	- local overload was not taken in account
 	- little bugs in redirections
