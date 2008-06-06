@@ -20,7 +20,8 @@ ok(
             localStorage        => 'Cache::FileCache',
             localStorageOptions => { 'namespace' => 'MyNamespace', },
         }
-    )
+    ),
+    'localInit'
 );
 
 ok(
@@ -32,22 +33,25 @@ ok(
                 'test'  => '$groups =~ /\badmin\b/',
             },
         }
-    )
+    ),
+    'locationRulesInit'
 );
 
-ok( $h->defaultValuesInit() );
-ok( $h->portalInit( { portal => 'http://auth.example.com' } ) );
+ok( $h->defaultValuesInit(), 'defaultValuesInit' );
+ok( $h->portalInit( { portal => 'http://auth.example.com' } ), 'portalInit' );
 ok(
     $h->globalStorageInit(
         {
             globalStorage        => 'Apache::Session::File',
             globalStorageOptions => {},
         }
-    )
+    ),
+    'globalStorageInit'
 );
-ok( $h->forgeHeadersInit );
-ok( $h->forgeHeadersInit( { exportedHeaders => { Auth => '$uid', } } ) );
+ok( $h->forgeHeadersInit, 'forgeHeadersInit' );
+ok( $h->forgeHeadersInit( { exportedHeaders => { Auth => '$uid', } } ),
+    'forgeHeadersInit 2' );
 
-ok( $h->grant('/s') );
-ok( !$h->grant('/no') );
-ok( $h->cleanLocalStorage == DECLINED );
+ok( $h->grant('/s'),                   'grant OK' );
+ok( !$h->grant('/no'),                 'grant NOK' );
+ok( $h->cleanLocalStorage == DECLINED, 'cleanLocalStorage' );

@@ -78,7 +78,7 @@ sub _handler {
 
 package Lemonldap::NG::Handler::_CGI;
 
-use Lemonldap::NG::Handler::SharedConf qw(:all);
+use Lemonldap::NG::Handler::SharedConf qw(:locationRules);
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
  

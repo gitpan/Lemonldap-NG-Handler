@@ -5,9 +5,10 @@ use strict;
 use MIME::Base64;
 use Exporter 'import';
 use Safe;
+require Data::Dumper;
 require POSIX;
 
-our $VERSION = '0.86';
+our $VERSION = '0.87';
 
 our %EXPORT_TAGS;
 
@@ -23,7 +24,7 @@ our (
     $globalStorage,       $globalStorageOptions, $localStorage,
     $localStorageOptions, $whatToTrace,          $https,
     $refLocalStorage,     $safe,                 $cookieSecured,
-    $port
+    $port,                $statusPipe,           $statusOut,
 );
 
 ##########################################
@@ -32,7 +33,8 @@ our (
 
 BEGIN {
     %EXPORT_TAGS = (
-        localStorage  => [qw( $localStorage $localStorageOptions $refLocalStorage )],
+        localStorage =>
+          [qw( $localStorage $localStorageOptions $refLocalStorage )],
         globalStorage => [qw( $globalStorage $globalStorageOptions )],
         locationRules => [
             qw(
@@ -48,37 +50,47 @@ BEGIN {
               $https $port
               )
         ],
-        log    => [qw( lmLog )],
-        traces => [qw( $whatToTrace )],
+        log    => [qw( lmSetApacheUser lmLog )],
+        traces => [qw( $whatToTrace $statusPipe $statusOut )],
         apache => [qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR )],
     );
     push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach ( keys %EXPORT_TAGS );
     $EXPORT_TAGS{all} = \@EXPORT_OK;
     if ( exists $ENV{MOD_PERL} ) {
         if ( $ENV{MOD_PERL_API_VERSION} and $ENV{MOD_PERL_API_VERSION} >= 2 ) {
-            *MP = sub { 2 };
+            eval 'use constant MP => 2;';
         }
         else {
-            *MP = sub { 1 };
+            eval 'use constant MP => 1;';
         }
     }
     else {
-        *MP = sub { 0 };
+        eval 'use constant MP => 0;';
     }
     if ( MP() == 2 ) {
+        require Apache2::Log;
+        require Apache2::RequestUtil;
+        Apache2::RequestUtil->import();
         require Apache2::RequestRec;
         Apache2::RequestRec->import();
-        require Apache2::Log;
+        require Apache2::ServerUtil;
+        Apache2::ServerUtil->import();
+        require Apache2::Connection;
+        Apache2::Connection->import();
+        require Apache2::RequestIO;
+        Apache2::RequestIO->import();
+        require APR::Table;
+        APR::Table->import();
         require Apache2::Const;
         Apache2::Const->import( '-compile', qw(:common :log) );
-        *FORBIDDEN    = \&Apache2::Const::FORBIDDEN;
-        *REDIRECT     = \&Apache2::Const::REDIRECT;
-        *OK           = \&Apache2::Const::OK;
-        *DECLINED     = \&Apache2::Const::DECLINED;
-        *DONE         = \&Apache2::Const::DONE;
-        *SERVER_ERROR = \&Apache2::Const::SERVER_ERROR;
-        require Apache2::compat;
-        Apache2::compat->import();
+        eval '
+        use constant FORBIDDEN    => Apache2::Const::FORBIDDEN;
+        use constant REDIRECT     => Apache2::Const::REDIRECT;
+        use constant OK           => Apache2::Const::OK;
+        use constant DECLINED     => Apache2::Const::DECLINED;
+        use constant DONE         => Apache2::Const::DONE;
+        use constant SERVER_ERROR => Apache2::Const::SERVER_ERROR;
+        ';
         eval {
             require threads::shared;
             threads::shared::share($locationRegexp);
@@ -96,6 +108,8 @@ BEGIN {
             threads::shared::share($https);
             threads::shared::share($port);
             threads::shared::share($refLocalStorage);
+            threads::shared::share($statusPipe);
+            threads::shared::share($statusOut);
         };
     }
     elsif ( MP() == 1 ) {
@@ -107,12 +121,12 @@ BEGIN {
     }
     else {    # For Test or CGI
         eval '
-            sub OK {0}
-            sub FORBIDDEN {1}
-            sub REDIRECT {2}
-            sub DECLINED {1}
-            sub DONE {4}
-            sub SERVER_ERROR {5}
+        use constant FORBIDDEN    => 1;
+        use constant REDIRECT     => 1;
+        use constant OK           => 1;
+        use constant DECLINED     => 1;
+        use constant DONE         => 1;
+        use constant SERVER_ERROR => 1;
         ';
     }
     *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
@@ -121,11 +135,15 @@ BEGIN {
 
 sub handler_mp1 ($$) { shift->run(@_); }
 
-sub handler_mp2 : method { shift->run(@_); }
+sub handler_mp2 : method {
+    shift->run(@_);
+}
 
 sub logout_mp1 ($$) { shift->unlog(@_); }
 
-sub logout_mp2 : method { shift->unlog(@_); }
+sub logout_mp2 : method {
+    shift->unlog(@_);
+}
 
 sub lmLog {
     my ( $class, $mess, $level ) = @_;
@@ -137,6 +155,17 @@ sub lmLog {
     }
     else {
         print STDERR "$mess\n";
+    }
+}
+
+sub lmSetApacheUser {
+    my ( $r, $s ) = @_;
+    return unless ($s);
+    if ( MP() == 2 ) {
+        $r->user($s);
+    }
+    else {
+        $r->connection->user($s);
     }
 }
 
@@ -196,6 +225,36 @@ sub lmHeaderOut {
     }
 }
 
+# Status daemon creation
+
+sub statusProcess {
+    require IO::Pipe;
+    $statusPipe = IO::Pipe->new;
+    $statusOut  = IO::Pipe->new;
+    if ( my $pid = fork() ) {
+        $statusPipe->writer();
+        $statusOut->reader();
+        $statusPipe->autoflush(1);
+    }
+    else {
+        $statusPipe->reader();
+        $statusOut->writer();
+        my $fdin  = $statusPipe->fileno;
+        my $fdout = $statusOut->fileno;
+        open STDIN, "<&$fdin";
+        open STDOUT, ">&$fdout";
+        my @tmp = ();
+        push @tmp, "-I$_" foreach (@INC);
+        exec 'perl', '-MLemonldap::NG::Handler::Status',
+          @tmp,
+          '-e',
+          '&Lemonldap::NG::Handler::Status::run('
+          . $localStorage . ','
+          . Data::Dumper->new( [$localStorageOptions] )->Terse(1)->Dump
+          . ');';
+    }
+}
+
 ##############################
 # Initialization subroutines #
 ##############################
@@ -237,6 +296,9 @@ sub localInit($$) {
             $class->lmLog( "Unable to clear local cache: $@", 'error' );
         }
     }
+    if ( $args->{status} ) {
+        statusProcess();
+    }
 
     # We don't initialise local storage in the "init" subroutine because it can
     # be used at the starting of Apache and so with the "root" privileges. Local
@@ -246,10 +308,9 @@ sub localInit($$) {
     # performances.
     no strict;
     if ( MP() == 2 ) {
-        Apache->push_handlers(
-            PerlChildInitHandler => sub { return $class->initLocalStorage( $_[1], $_[0] ); }
-        );
-        Apache->push_handlers(
+        Apache2::ServerUtil->server->push_handlers( PerlChildInitHandler =>
+              sub { return $class->initLocalStorage( $_[1], $_[0] ); } );
+        Apache2::ServerUtil->server->push_handlers(
             PerlCleanupHandler => sub { return $class->cleanLocalStorage(@_); }
         );
     }
@@ -420,6 +481,14 @@ sub forgeHeadersInit {
     1;
 }
 
+sub updateStatus {
+    my ( $class, $user, $url, $action ) = @_;
+    print $statusPipe "$user => "
+      . $apacheRequest->hostname
+      . "$url $action\n"
+      if ($statusPipe);
+}
+
 ################
 # MAIN PROCESS #
 ################
@@ -438,8 +507,18 @@ sub grant {
 sub forbidden {
     my $class = shift;
     if ( $datas->{_logout} ) {
-        return $class->goToPortal( $datas->{_logout}, 'logout=1' );
+        $class->updateStatus( $datas->{$whatToTrace}, $_[0], 'LOGOUT' );
+        my $u = $datas->{_logout};
+        $class->localUnlog;
+        return $class->goToPortal( $u, 'logout=1' );
     }
+    $class->updateStatus( $datas->{$whatToTrace}, $_[0], 'REJECT' );
+    $class->logForbidden(@_);
+    return FORBIDDEN;
+}
+
+sub logForbidden {
+    my $class = shift;
     $class->lmLog(
         'The user "'
           . $datas->{$whatToTrace}
@@ -447,7 +526,6 @@ sub forbidden {
           . shift,
         'notice'
     );
-    return FORBIDDEN;
 }
 
 # hideCookie : hide Lemonldap::NG cookie to the protected application
@@ -480,7 +558,7 @@ sub encodeUrl {
 }
 
 # Redirect non-authenticated users to the portal
-sub goToPortal() {
+sub goToPortal {
     my ( $class, $url, $arg ) = @_;
     $class->lmLog(
         "Redirect "
@@ -495,7 +573,7 @@ sub goToPortal() {
 }
 
 # Fetch $id
-sub fetchId() {
+sub fetchId {
     my $t = lmHeaderIn( $apacheRequest, 'Cookie' );
     return ( $t =~ /$cookieName=([^; ]+);?/o ) ? $1 : 0;
 }
@@ -506,13 +584,15 @@ sub run ($$) {
     ( $class, $apacheRequest ) = @_;
 
     return DECLINED unless ( $apacheRequest->is_initial_req );
-    my $uri = $apacheRequest->uri . ( $apacheRequest->args ? "?" . $apacheRequest->args : "" );
+    my $uri = $apacheRequest->uri
+      . ( $apacheRequest->args ? "?" . $apacheRequest->args : "" );
 
     # AUTHENTICATION
     # I - recover the cookie
     my $id;
     unless ( $id = $class->fetchId ) {
         $class->lmLog( "$class: No cookie found", 'info' );
+        $class->updateStatus( $apacheRequest->connection->remote_ip, $apacheRequest->uri, 'REDIRECT' );
         return $class->goToPortal($uri);
     }
 
@@ -532,6 +612,7 @@ sub run ($$) {
                 # The cookie isn't yet available
                 $class->lmLog( "The cookie $id isn't yet available: $@",
                     'info' );
+                $class->updateStatus( $apacheRequest->connection->remote_ip, $apacheRequest->uri, 'EXPIRED' );
                 return $class->goToPortal($uri);
             }
             $datas->{$_} = $h{$_} foreach ( keys %h );
@@ -546,11 +627,11 @@ sub run ($$) {
 
     # ACCOUNTING
     # 1 - Inform Apache
-    $apacheRequest->connection->user( $datas->{$whatToTrace} )
-      if ( $datas->{$whatToTrace} );
+    lmSetApacheUser( $apacheRequest, $datas->{$whatToTrace} );
 
     # AUTHORIZATION
     return $class->forbidden($uri) unless ( $class->grant($uri) );
+    $class->updateStatus( $datas->{$whatToTrace}, $apacheRequest->uri, 'OK' );
     $class->lmLog(
         "User "
           . $datas->{$whatToTrace}
@@ -596,10 +677,12 @@ sub unprotect {
 sub localUnlog {
     my $class = shift;
     if ( my $id = $class->fetchId ) {
+
         # Delete Apache thread datas
         if ( $id eq $datas->{_session_id} ) {
             $datas = {};
         }
+
         # Delete Apache local cache
         if ( $refLocalStorage and $refLocalStorage->get($id) ) {
             $refLocalStorage->remove($id);
@@ -611,6 +694,7 @@ sub unlog ($$) {
     my $class;
     ( $class, $apacheRequest ) = @_;
     $class->localUnlog;
+    $class->updateStatus( $apacheRequest->connection->remote_ip, $apacheRequest->uri, 'LOGOUT' );
     return $class->goToPortal( '/', 'logout=1' );
 }
 
@@ -619,16 +703,54 @@ sub redirectFilter {
     my $url   = shift;
     my $f     = shift;
     unless ( $f->ctx ) {
+
         # Here, we can use Apache2 functions instead of lmSetHeaderOut because
         # this function is used only with Apache2.
         $f->r->status(REDIRECT);
         $f->r->status_line("302 Temporary Moved");
+        $f->r->headers_out->unset('Location');
         $f->r->err_headers_out->set( 'Location' => $url );
         $f->ctx(1);
     }
     while ( $f->read( my $buffer, 1024 ) ) {
     }
+    $class->updateStatus( ( $datas->{$whatToTrace} ? $datas->{$whatToTrace} : $f->r->connection->remote_ip ), 'filter', 'REDIRECT' );
     return REDIRECT;
+}
+
+sub status($$) {
+    my ( $class, $r ) = @_;
+    $class->lmLog( "$class: request for status", 'debug' );
+    return SERVER_ERROR unless ( $statusPipe and $statusOut );
+    $r->handler("perl-script");
+    print $statusPipe "STATUS" . ( $r->args ? " " . $r->args : '' ) . "\n";
+    my $buf;
+    while (<$statusOut>) {
+        last if (/^END$/);
+        $buf .= $_;
+    }
+    if ( MP() == 2 ) {
+        $r->push_handlers(
+            'PerlResponseHandler' => sub {
+                my $r = shift;
+                $r->content_type('text/html; charset=UTF-8');
+                $r->print($buf);
+                OK;
+            }
+        );
+    }
+    else {
+        $r->push_handlers(
+            'PerlHandler' => sub {
+                my $r = shift;
+                $r->content_type('text/html; charset=UTF-8');
+                $r->send_http_header;
+                $r->print($buf);
+                OK;
+            }
+        );
+    }
+    return OK;
 }
 
 1;
@@ -675,9 +797,9 @@ More complete example
   our @ISA = qw(Lemonldap::NG::Handler::Simple);
 
   __PACKAGE__->init ( { locationRules => {
-             '^/pj/.*$'       => q($qualif="opj"),
-             '^/rh/.*$'       => q($ou=~/brh/),
-             '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
+             '^/pj/.*$'       => '$qualif="opj"',
+             '^/rh/.*$'       => '$ou=~/brh/',
+             '^/rh_or_opj.*$' => '$qualif="opj" or $ou=~/brh/',
              default => 'accept', # means that all authenticated users are greanted
            },
            globalStorage        => 'Apache::Session::MySQL',

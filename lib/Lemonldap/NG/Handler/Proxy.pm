@@ -167,6 +167,8 @@ manage redirections if the remote host use it without the good domain.
 =item * B<LmLocationToReplace> (optional): substitution to do to avoid bad
 redirections. See synopsys for usage.
 
+=back
+
 =head2 EXPORT
 
 None by default.

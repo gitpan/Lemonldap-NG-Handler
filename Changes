@@ -1,5 +1,9 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.87  Tue may 9 22:32:44 2008
+	- Remove Apache2::compat dependency
+	- New status module
+
 0.86  Mon apr 7 14:52:30 2008
 	- logout bug : logout_sso target was not running (Closes: #308856 /
 	  forge.objectweb.org)

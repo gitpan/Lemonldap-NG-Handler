@@ -9,7 +9,7 @@ use Cache::Cache qw($EXPIRES_NEVER);
 
 our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.61';
+our $VERSION    = '0.62';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -21,7 +21,7 @@ BEGIN {
     if ( MP() == 2 ) {
         eval {
             require threads::shared;
-            Apache2::compat->import();
+            Apache2::RequestUtil->import();
             threads::shared::share($cfgNum);
             threads::shared::share($lastReload);
             threads::shared::share($reloadTime);
@@ -32,9 +32,12 @@ BEGIN {
     }
     *EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
     *EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
-    push( @{ $EXPORT_TAGS{$_} }, qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig) )
-      foreach (qw(variables localStorage));
-    push @EXPORT_OK, qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig);
+    push(
+        @{ $EXPORT_TAGS{$_} },
+        qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig)
+    ) foreach (qw(variables localStorage));
+    push @EXPORT_OK,
+      qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig);
 }
 
 # INIT PROCESS
@@ -50,14 +53,24 @@ sub init($$) {
 # defaultValuesInit : set default values for non-customized variables
 sub defaultValuesInit {
     my ( $class, $args ) = @_;
+
     # Local configuration overrides global configuration
-    $cookieName    = $localConfig->{cookieName} || $args->{cookieName} || 'lemonldap';
-    $cookieSecured = $localConfig->{cookieSecured} || $args->{cookieSecured} || 0;
-    $whatToTrace   = $localConfig->{whatToTrace} || $args->{whatToTrace}   || '$uid';
+    $cookieName =
+         $localConfig->{cookieName}
+      || $args->{cookieName}
+      || 'lemonldap';
+    $cookieSecured =
+         $localConfig->{cookieSecured}
+      || $args->{cookieSecured}
+      || 0;
+    $whatToTrace =
+         $localConfig->{whatToTrace}
+      || $args->{whatToTrace}
+      || '$uid';
     $whatToTrace =~ s/\$//g;
     $https = $localConfig->{https} unless defined($https);
-    $https = $args->{https} unless defined($https);
-    $https = 1 unless defined($https);
+    $https = $args->{https}        unless defined($https);
+    $https = 1                     unless defined($https);
     1;
 }
 
@@ -96,10 +109,12 @@ sub confTest($$) {
     my ( $class, $args ) = @_;
     if ( $args->{_n_conf} ) {
         return 1 if ( $args->{_n_conf} == $cfgNum );
-        if( $childLock ) {
-            $class->lmLog( "$class: child $$ detects configuration but local "
-                         . 'storage is locked, continues to work with the old one',
-                           'debug' );
+        if ($childLock) {
+            $class->lmLog(
+                "$class: child $$ detects configuration but local "
+                  . 'storage is locked, continues to work with the old one',
+                'debug'
+            );
             return 1;
         }
         $childLock = 1;
@@ -120,7 +135,6 @@ sub localConfUpdate($$) {
         # TODO: LOCK
         #unless ( $class->confTest($args) ) {
         $class->globalConfUpdate($r);
-
         #}
         # TODO: UNLOCK;
     }
@@ -134,6 +148,7 @@ sub globalConfUpdate {
 
     # getConf can return an Apache constant in case of error
     return $tmp unless ( ref($tmp) );
+
     # Local arguments have a best precedence
     foreach ( keys %$tmp ) {
         $tmp->{$_} = $localConfig->{$_} if ( $localConfig->{$_} );
@@ -166,12 +181,24 @@ sub refresh($$) {
     my ( $class, $r ) = @_;
     $class->lmLog( "$class: request for configuration reload", 'notice' );
     $r->handler("perl-script");
-    my $perlHandler = (MP() ==2) ? 'PerlResponseHandler' : 'PerlHandler';
-    if ( $class->globalConfUpdate($r) == OK ) {
-        $r->push_handlers( $perlHandler => sub { my $r = shift; $r->send_http_header; OK } );
+    if ( MP() == 2 ) {
+        if ( $class->globalConfUpdate($r) == OK ) {
+            $r->push_handlers( 'PerlResponseHandler' =>
+                  sub { my $r = shift; $r->content_type('text/plain'); OK } );
+        }
+        else {
+            $r->push_handlers( 'PerlResponseHandler' => sub { SERVER_ERROR } );
+        }
     }
     else {
-        $r->push_handlers( PerlHandler => sub { SERVER_ERROR } );
+        if ( $class->globalConfUpdate($r) == OK ) {
+            $r->push_handlers(
+                'PerlHandler' => sub { my $r = shift; $r->send_http_header; OK }
+            );
+        }
+        else {
+            $r->push_handlers( 'PerlHandler' => sub { SERVER_ERROR } );
+        }
     }
     return OK;
 }

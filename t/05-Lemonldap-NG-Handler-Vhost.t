@@ -34,12 +34,14 @@ ok(
                 },
             },
         }
-    )
+    ),
+    'locationRulesInit'
 );
 
 ok(
     $h->forgeHeadersInit(
         { exportedHeaders => { www1 => { Auth => '$uid', } } }
-    )
+    ),
+    'forgeHeadersInit'
 );
 

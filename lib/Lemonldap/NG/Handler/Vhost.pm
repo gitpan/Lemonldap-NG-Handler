@@ -114,9 +114,9 @@ Create your own package:
                  'default' => '$ou =~ /brh/'
              },
              'vhost2.dc.com' => {
-                 '^/pj/.*$'       => q($qualif="opj"),
-                 '^/rh/.*$'       => q($ou=~/brh/),
-                 '^/rh_or_opj.*$' => q($qualif="opj or $ou=~/brh/),
+                 '^/pj/.*$'       => '$qualif="opj"',
+                 '^/rh/.*$'       => '$ou=~/brh/',
+                 '^/rh_or_opj.*$' => '$qualif="opj" or $ou=~/brh/',
                  default          => 'accept',
              },
              # Put here others Lemonldap::NG::Handler::Simple options

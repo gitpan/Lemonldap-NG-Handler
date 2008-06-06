@@ -18,5 +18,7 @@ __PACKAGE__->init ( {
     },
 
     https               => 0,
+    # Uncomment this to activate status module
+    # status            => 1,
 } );
-
+1;
