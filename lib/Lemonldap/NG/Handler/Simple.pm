@@ -8,7 +8,7 @@ use Safe;
 require Data::Dumper;
 require POSIX;
 
-our $VERSION = '0.87';
+our $VERSION = '0.88';
 
 our %EXPORT_TAGS;
 

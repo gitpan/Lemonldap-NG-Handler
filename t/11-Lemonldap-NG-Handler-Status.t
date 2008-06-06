@@ -5,13 +5,21 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 9;
+BEGIN {
+    our $home=0;
+    $home++ if($ENV{DEBFULLNAME} eq 'Xavier Guimard');
+}
+
+use Test::More tests => 1 + 8*$home;
 BEGIN { use_ok( 'Lemonldap::NG::Handler::Simple', ':all' ) }
 
 #########################
 
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
+
+exit unless($home);
+
 my $h;
 $h = bless {}, 'Lemonldap::NG::Handler::Simple';
 ok(
