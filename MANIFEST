@@ -2,9 +2,11 @@ Changes
 example/autoProtectedCGI.pl
 example/lmH-apache.conf
 example/lmH-apache2.conf
+example/menu.pl
 example/MyHandler.pm
 example/MyHandlerLog4Perl.pm
 lib/Lemonldap/NG/Handler.pm
+lib/Lemonldap/NG/Handler/AuthBasic.pm
 lib/Lemonldap/NG/Handler/CDA.pm
 lib/Lemonldap/NG/Handler/CGI.pm
 lib/Lemonldap/NG/Handler/Proxy.pm

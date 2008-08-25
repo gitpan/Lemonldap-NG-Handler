@@ -4,6 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'Lemonldap::NG::Handler',
     VERSION_FROM      => 'lib/Lemonldap/NG/Handler.pm',
+    PMLIBDIRS         => [ 'lib' ],
     PREREQ_PM         => {
         'Apache::Session'        => 0,
         'LWP::UserAgent'         => 0,

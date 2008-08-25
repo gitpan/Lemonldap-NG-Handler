@@ -8,7 +8,7 @@ use Safe;
 require Data::Dumper;
 require POSIX;
 
-our $VERSION = '0.88';
+our $VERSION = '0.89';
 
 our %EXPORT_TAGS;
 
@@ -500,7 +500,7 @@ sub grant {
         return &{ $locationCondition->[$i] }($datas)
           if ( $uri =~ $locationRegexp->[$i] );
     }
-    return &$defaultCondition;
+    return &$defaultCondition($datas);
 }
 
 # forbidden : used to reject non authorizated requests

@@ -10,23 +10,24 @@ our @ISA = qw(CGI);
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 
-our $VERSION = '0.02';
+our $VERSION = '0.1';
 
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new();
     $self->{_handler} = bless {}, 'Lemonldap::NG::Handler::_CGI';
-    $self->_handler->init( @_ );
+    $self->_handler->init(@_);
     $self->_handler->initLocalStorage();
-    die "Unable to get configuration" unless $self->_handler->localConfUpdate() == OK;
+    die "Unable to get configuration"
+      unless $self->_handler->localConfUpdate() == OK;
     return $self;
 }
 
 sub authenticate {
-    my $self = shift;
+    my $self    = shift;
     my %cookies = fetch CGI::Cookie;
     my $id;
-    unless( $cookies{$cookieName} and $id = $cookies{$cookieName}->value ) {
+    unless ( $cookies{$cookieName} and $id = $cookies{$cookieName}->value ) {
         return $self->goToPortal();
     }
     unless ( $datas and $id eq $datas->{_session_id} ) {
@@ -42,7 +43,6 @@ sub authenticate {
             }
         }
     }
-    #return __PACKAGE__->forbidden($uri) unless ( __PACKAGE__->grant($uri) );
     return 1;
 }
 
@@ -51,25 +51,36 @@ sub authorize {
     return $self->_handler->grant( $ENV{REQUEST_URI} );
 }
 
+sub testUri {
+    my $self = shift;
+    my $uri  = shift;
+    my $host = ( $uri =~ s#^(?:https?://)?([^/]*)/#/# ) ? $1 : $ENV{SERVER_NAME};
+    return -1 unless ( $self->_handler->vhostAvailable($host) );
+    return $self->_handler->grant( $uri, $host );
+}
+
 sub user {
     return $datas;
 }
 
 sub group {
-    my($self, $group) = @_;
-    return ($datas->{groups} =~ /\b$group\b/)
+    my ( $self, $group ) = @_;
+    return ( $datas->{groups} =~ /\b$group\b/ );
 }
 
 sub goToPortal {
     my $self = shift;
-    my $tmp = encode_base64( $self->_uri );
+    my $tmp  = encode_base64( $self->_uri );
     $tmp =~ s/[\r\n]//sg;
     print CGI::redirect( -uri => "$portal?url=$tmp" );
     exit;
 }
 
 sub _uri {
-    return 'http'.($https ? 's' : '').'://'.$ENV{SERVER_NAME}.$ENV{REQUEST_URI};
+    return 'http'
+      . ( $https ? 's' : '' ) . '://'
+      . $ENV{SERVER_NAME}
+      . $ENV{REQUEST_URI};
 }
 
 sub _handler {
@@ -81,16 +92,21 @@ package Lemonldap::NG::Handler::_CGI;
 use Lemonldap::NG::Handler::SharedConf qw(:locationRules);
 
 our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
- 
+
 sub lmLog {
     my ( $self, $mess, $level ) = @_;
     $mess =~ s/^.*HASH[^:]*:/__PACKAGE__/e;
-    print STDERR "$mess\n" unless( $level eq 'debug' );
+    print STDERR "$mess\n" unless ( $level eq 'debug' );
+}
+
+sub vhostAvailable {
+    my ( $self, $vhost ) = @_;
+    return defined( $defaultCondition->{$vhost} );
 }
 
 sub grant {
-    my ( $self, $uri ) = @_;
-    my $vhost = $ENV{SERVER_NAME};
+    my ( $self, $uri, $vhost ) = @_;
+    $vhost ||= $ENV{SERVER_NAME};
     for ( my $i = 0 ; $i < $locationCount->{$vhost} ; $i++ ) {
         if ( $uri =~ $locationRegexp->{$vhost}->[$i] ) {
             return &{ $locationCondition->{$vhost}->[$i] }($datas);
@@ -103,7 +119,7 @@ sub grant {
         );
         return 0;
     }
-    return &{ $defaultCondition->{$vhost} };
+    return &{ $defaultCondition->{$vhost} }($datas);
 }
 
 1;
