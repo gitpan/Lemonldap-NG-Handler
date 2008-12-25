@@ -1,5 +1,16 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.9   Thu Dec 25 8:43:55 2008
+	- Configuration now managed by Lemonldap::NG::Common::Conf
+	- Custom functions
+	- Status now couns only past minutes, not current one
+	- Protection management in Handler/CGI
+
+0.89  Mon Aug 25 21:59:34 2008
+	- Bug in default condition: rules are always "deny" or "accept"
+	- More examples
+	- New file : AuthBasic.pm
+
 0.88  Fri jun 6 14:58:41 2008
 	- Status.pm test failed in jail
 

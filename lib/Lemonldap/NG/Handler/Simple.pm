@@ -8,7 +8,7 @@ use Safe;
 require Data::Dumper;
 require POSIX;
 
-our $VERSION = '0.89';
+our $VERSION = '0.9';
 
 our %EXPORT_TAGS;
 
@@ -25,6 +25,7 @@ our (
     $localStorageOptions, $whatToTrace,          $https,
     $refLocalStorage,     $safe,                 $cookieSecured,
     $port,                $statusPipe,           $statusOut,
+    $customFunctions,
 );
 
 ##########################################
@@ -40,6 +41,7 @@ BEGIN {
             qw(
               $locationCondition $defaultCondition $locationCount
               $locationRegexp $apacheRequest $datas $safe $portal
+              safe $customFunctions
               )
         ],
         import  => [qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS )],
@@ -50,7 +52,7 @@ BEGIN {
               $https $port
               )
         ],
-        log    => [qw( lmSetApacheUser lmLog )],
+        log    => [qw(lmSetApacheUser)],
         traces => [qw( $whatToTrace $statusPipe $statusOut )],
         apache => [qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR )],
     );
@@ -260,8 +262,31 @@ sub statusProcess {
 ##############################
 
 # Security jail
-$safe = new Safe;
-$safe->share( '&encode_base64', '$datas', '&lmSetHeaderIn', '$apacheRequest' );
+sub safe {
+    my $class = shift;
+    return $safe if($safe);
+    $safe = new Safe;
+    my @t = $customFunctions ? split( /\s+/, $customFunctions ) : ();
+    foreach(@t) {
+        $class->lmLog("Custom function : $_",'debug');
+        my $sub = $_;
+        unless(/::/) {
+            $sub = "$class\::$_";
+        }
+        else {
+            s/^.*:://;
+        }
+        next if($class->can($_));
+        eval "sub $_ {
+            return $sub(\$apacheRequest->uri
+                . ( \$apacheRequest->args ? '?' . \$apacheRequest->args : '' )
+                , \@_)
+            }";
+        $class->lmLog($@,'error')if($@);
+    }
+    $safe->share( '&encode_base64', '$datas', '&lmSetHeaderIn', '$apacheRequest', @t );
+    return $safe;
+}
 
 # init() : by default, it calls localInit and globalInit, but with
 #          a shared configuration, init() is overloaded to call only
@@ -280,25 +305,16 @@ sub localInit($$) {
         $localStorageOptions = $args->{localStorageOptions};
         $localStorageOptions->{namespace}          ||= "lemonldap";
         $localStorageOptions->{default_expires_in} ||= 600;
-
-        eval "use $localStorage;";
-        die("Unable to load $localStorage: $@") if ($@);
-
-        # At each Apache (re)start, we've to clear the cache to avoid living
-        # with old datas
-        eval '$refLocalStorage = new '
-          . $localStorage
-          . '($localStorageOptions);';
-        if ( defined $refLocalStorage ) {
-            $refLocalStorage->clear();
-        }
-        else {
-            $class->lmLog( "Unable to clear local cache: $@", 'error' );
-        }
+        $class->purgeCache();
     }
     if ( $args->{status} ) {
         statusProcess();
     }
+    $class->childInit();
+}
+
+sub childInit {
+    my $class = shift;
 
     # We don't initialise local storage in the "init" subroutine because it can
     # be used at the starting of Apache and so with the "root" privileges. Local
@@ -323,6 +339,24 @@ sub localInit($$) {
         );
     }
     1;
+}
+
+sub purgeCache {
+    my $class = shift;
+    eval "use $localStorage;";
+    die("Unable to load $localStorage: $@") if ($@);
+
+    # At each Apache (re)start, we've to clear the cache to avoid living
+    # with old datas
+    eval '$refLocalStorage = new '
+      . $localStorage
+      . '($localStorageOptions);';
+    if ( defined $refLocalStorage ) {
+        $refLocalStorage->clear();
+    }
+    else {
+        $class->lmLog( "Unable to clear local cache: $@", 'error' );
+    }
 }
 
 # Global initialization process :
@@ -412,7 +446,7 @@ sub conditionSub {
     $cond =~ s/\$date/&POSIX::strftime("%Y%m%d%H%M%S",localtime())/e;
     $cond =~ s/\$(\w+)/\$datas->{$1}/g;
     my $sub;
-    $sub = $safe->reval("sub {return ( $cond )}");
+    $sub = $class->safe->reval("sub {return ( $cond )}");
     return $sub;
 }
 
@@ -428,6 +462,7 @@ sub defaultValuesInit {
     $https = $args->{https} unless defined($https);
     $https = 1 unless defined($https);
     $port = $args->{port} || 0 unless defined($port);
+    $customFunctions = $args->{customFunctions};
     1;
 }
 
@@ -475,7 +510,7 @@ sub forgeHeadersInit {
 
     #$sub = "\$forgeHeaders = sub {$sub};";
     #eval "$sub";
-    $forgeHeaders = $safe->reval("sub {$sub};");
+    $forgeHeaders = $class->safe->reval("sub {$sub};");
     $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' )
       if ($@);
     1;
@@ -656,12 +691,10 @@ sub sendHeaders {
 sub initLocalStorage {
     my ( $class, $r ) = @_;
     if ( $localStorage and not $refLocalStorage ) {
-        eval '$refLocalStorage = new '
-          . $localStorage
-          . '($localStorageOptions);';
+        eval "use $localStorage;\$refLocalStorage = new $localStorage(\$localStorageOptions);";
+        $class->lmLog( "Local cache initialization failed: $@", 'error' )
+          unless ( defined $refLocalStorage );
     }
-    $class->lmLog( "Local cache initialization failed: $@", 'error' )
-      unless ( defined $refLocalStorage );
     return DECLINED;
 }
 

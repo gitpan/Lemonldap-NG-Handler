@@ -55,8 +55,6 @@ sub read {
         #print LOG $_;
         $ok++ if (/^OK\s+:\s*2\s*\(2\.00\s*\/\s*mn\)$/);
         $ok++ if (/^REJECT\s+:\s*1\s*\(1\.00\s*\/\s*mn\)$/);
-        $ok++ if (/^OK\s+:\s*[\d\.]+\s*\/\s*mn$/);
-        $ok++ if (/^REJECT\s+:\s*[\d\.]+\s*\/\s*mn$/);
         if (/^END$/) {
             $ok++;
             last;
@@ -64,5 +62,5 @@ sub read {
     }
     #print LOG "$ok\n";
     #close LOG;
-    return ( $ok == 5 );
+    return ( $ok == 3 );
 }

@@ -4,6 +4,8 @@ use strict;
 use POSIX;
 use Data::Dumper;
 
+our $VERSION  = "0.2";
+
 our $status   = {};
 our $activity = [];
 our $start    = int( time / 60 );
@@ -47,7 +49,8 @@ eval {
 sub run {
     my ( $localStorage, $localStorageOptions ) = ( shift, shift );
     my $refLocalStorage;
-    eval "use $localStorage; \$refLocalStorage = new $localStorage(\$localStorageOptions);";
+    eval
+"use $localStorage; \$refLocalStorage = new $localStorage(\$localStorageOptions);";
     die($@) if ($@);
     $| = 1;
     my ( $lastMn, $mn, $count );
@@ -58,7 +61,7 @@ sub run {
         if ( $mn > $lastMn ) {
             for ( my $i = 0 ; $i < $mn - $lastMn ; $i++ ) {
                 unshift @$activity, {};
-                delete $activity->[MN_COUNT];
+                delete $activity->[ MN_COUNT + 1 ];
             }
         }
         $lastMn = $mn;
@@ -108,8 +111,9 @@ sub run {
                     $c->{$_} += $v->{$_};
                 }
             }
-            foreach my $mn (@$activity) {
-                $m->{$_} += $mn->{$_} foreach ( keys %$mn );
+            for ( my $i = 1 ; $i < @$activity ; $i++ ) {
+                $m->{$_} += $activity->[$i]->{$_}
+                  foreach ( keys %{ $activity->[$i] } );
             }
             foreach ( keys %$m ) {
                 $m->{$_} = sprintf( "%.2f", $m->{$_} / MN_COUNT );
@@ -154,7 +158,8 @@ sub run {
                   "<h2>Virtual Host activity</h2>\n<div id=\"vhost\"><pre>\n";
                 foreach (
                     sort { $count->{vhost}->{$b} <=> $count->{vhost}->{$a} }
-                    keys %{ $count->{vhost} } )
+                    keys %{ $count->{vhost} }
+                  )
                 {
                     print sprintf( "%-40s : %6d\n", $_, $count->{vhost}->{$_} );
                 }
@@ -163,8 +168,10 @@ sub run {
                 # General
                 print "<h2>Top used URI</h2>\n<div id=\"uri\"><pre>\n";
                 my $i = 0;
-                foreach ( sort { $count->{uri}->{$b} <=> $count->{uri}->{$a} }
-                    keys %{ $count->{uri} } )
+                foreach (
+                    sort { $count->{uri}->{$b} <=> $count->{uri}->{$a} }
+                    keys %{ $count->{uri} }
+                  )
                 {
                     last if ( $i == $args->{top} );
                     last unless ( $count->{uri}->{$_} );
@@ -174,9 +181,11 @@ sub run {
                 print "\n</pre></div>\n";
 
                 # Top by category
-                print "<table border=\"1\" width=\"100%\"><tr><th>Code</th><th>Top</ht></tr>\n";
+                print
+"<table border=\"1\" width=\"100%\"><tr><th>Code</th><th>Top</ht></tr>\n";
                 foreach my $cat ( split /,/, $args->{categories} ) {
-                    print "<tr><td><pre>$cat</pre></td><td nowrap>\n<div id=\"$cat\">\n";
+                    print
+"<tr><td><pre>$cat</pre></td><td nowrap>\n<div id=\"$cat\">\n";
                     topByCat( $cat, $args->{top} );
                     print "</div>\n</td></tr>";
                 }

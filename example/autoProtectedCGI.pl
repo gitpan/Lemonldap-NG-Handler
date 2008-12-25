@@ -1,15 +1,6 @@
 #!/usr/bin/perl
 
 my $cgi = new Lemonldap::NG::Handler::CGI ( {
-    localStorage        => "Cache::FileCache",
-    localStorageOptions => {
-        'namespace'          => 'MyNamespace',
-        'default_expires_in' => 600,
-    },
-    configStorage       => {
-        type                 => 'File',
-        dirName              => '__CONFDIR__',
-    },
     https => 0,
   }
 );

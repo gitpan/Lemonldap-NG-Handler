@@ -5,7 +5,7 @@ use strict;
 use Lemonldap::NG::Handler::Simple qw(:apache :headers :log);
 use LWP::UserAgent;
 
-our $VERSION = '0.31';
+our $VERSION = '0.4';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
@@ -18,10 +18,10 @@ BEGIN {
     *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
 }
 
-sub handler_mp1 ($$) { &run(@_) }
+sub handler_mp1 ($$) { shift->run(@_); }
 
 sub handler_mp2 : method {
-    &run(@_);
+    shift->run(@_);
 }
 
 ########
@@ -56,7 +56,6 @@ sub run($$) {
     # Scan Apache request headers to generate LWP request headers
     $r->headers_in->do(
         sub {
-            $_[1] =~ s/lemon=[^;]*;?// if ( $_[0] =~ /Cookie/i );
             return 1 if ( $_[1] =~ /^$/ );
             $request->header(@_) unless ( $_[0] =~ /^(Host|Referer)$/i );
             $class->lmLog(
@@ -111,7 +110,7 @@ sub headers {
         sub {
 
             # Replace Location headers
-            $_[1] =~ s#$location_old#$location_new#
+            $_[1] =~ s#$location_old#$location_new#o
               if ( $location_old and $location_new and $_[0] =~ /Location/i );
             lmSetErrHeaderOut( $r, @_ );
             $class->lmLog(

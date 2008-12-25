@@ -4,9 +4,9 @@ use strict;
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 
-our $VERSION = '0.02';
+our $VERSION = '0.1';
 
-our @ISA = qw(Lemonldap::NG::Handler::SharedConf);
+use base qw(Lemonldap::NG::Handler::SharedConf);
 
 *EXPORT_TAGS = *Lemonldap::NG::Handler::SharedConf::EXPORT_TAGS;
 *EXPORT_OK   = *Lemonldap::NG::Handler::SharedConf::EXPORT_OK;

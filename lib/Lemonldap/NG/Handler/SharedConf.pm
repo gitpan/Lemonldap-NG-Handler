@@ -4,16 +4,15 @@ use strict;
 
 use Lemonldap::NG::Handler::Simple qw(:all);
 use Lemonldap::NG::Handler::Vhost;
-use Lemonldap::NG::Manager::Conf;
+use Lemonldap::NG::Common::Conf;
 use Cache::Cache qw($EXPIRES_NEVER);
 
-our @ISA = qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
+use base qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
-our $VERSION    = '0.62';
+our $VERSION    = '0.7';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
-our $childLock = 0;
 our $lmConf;
 our $localConfig;
 
@@ -25,7 +24,6 @@ BEGIN {
             threads::shared::share($cfgNum);
             threads::shared::share($lastReload);
             threads::shared::share($reloadTime);
-            threads::shared::share($childLock);
             threads::shared::share($lmConf);
             threads::shared::share($localConfig);
         };
@@ -34,10 +32,9 @@ BEGIN {
     *EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
     push(
         @{ $EXPORT_TAGS{$_} },
-        qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig)
+        qw($cfgNum $lastReload $reloadTime $lmConf $localConfig)
     ) foreach (qw(variables localStorage));
-    push @EXPORT_OK,
-      qw($cfgNum $lastReload $reloadTime $childLock $lmConf $localConfig);
+    push @EXPORT_OK, qw($cfgNum $lastReload $reloadTime $lmConf $localConfig);
 }
 
 # INIT PROCESS
@@ -55,149 +52,99 @@ sub defaultValuesInit {
     my ( $class, $args ) = @_;
 
     # Local configuration overrides global configuration
-    $cookieName =
-         $localConfig->{cookieName}
-      || $args->{cookieName}
-      || 'lemonldap';
-    $cookieSecured =
-         $localConfig->{cookieSecured}
-      || $args->{cookieSecured}
-      || 0;
-    $whatToTrace =
-         $localConfig->{whatToTrace}
-      || $args->{whatToTrace}
-      || '$uid';
-    $whatToTrace =~ s/\$//g;
-    $https = $localConfig->{https} unless defined($https);
-    $https = $args->{https}        unless defined($https);
-    $https = 1                     unless defined($https);
-    1;
+    my %h = ( %$args, %$localConfig );
+    return $class->SUPER::defaultValuesInit( \%h );
 }
 
 sub localInit {
     my ( $class, $args ) = @_;
-    $lmConf = Lemonldap::NG::Manager::Conf->new( $args->{configStorage} );
+    die("$class : unable to build configuration : $Lemonldap::NG::Common::Conf::msg")
+        unless($lmConf = Lemonldap::NG::Common::Conf->new( $args->{configStorage} ));
+
+    # localStorage can be declared in configStorage or at the root or both
+    foreach (qw(localStorage localStorageOptions)) {
+        $args->{$_} ||= $args->{configStorage}->{$_} || $lmConf->{$_};
+        $args->{configStorage}->{$_} ||= $args->{$_};
+    }
     $class->defaultValuesInit($args);
     $class->SUPER::localInit($args);
 }
+
+# MAIN
 
 # Each $reloadTime, the Apache child verify if its configuration is the same
 # as the configuration stored in the local storage.
 sub run($$) {
     my ( $class, $r ) = @_;
     if ( time() - $lastReload > $reloadTime ) {
-        unless ( $class->localConfUpdate($r) == OK ) {
+        unless ( my $tmp = $class->testConf(1) == OK ) {
             $class->lmLog( "$class: No configuration found", 'error' );
-            return SERVER_ERROR;
+            return $tmp;
         }
     }
     return $class->SUPER::run($r);
 }
 
-sub logout($$) {
-    my ( $class, $r ) = @_;
-    if ( time() - $lastReload > $reloadTime ) {
-        unless ( $class->localConfUpdate($r) == OK ) {
-            $class->lmLog( "$class: No configuration found", 'error' );
-            return SERVER_ERROR;
-        }
-    }
-    return $class->SUPER::logout($r);
-}
+# CONFIGURATION UPDATE
 
-sub confTest($$) {
-    my ( $class, $args ) = @_;
-    if ( $args->{_n_conf} ) {
-        return 1 if ( $args->{_n_conf} == $cfgNum );
-        if ($childLock) {
-            $class->lmLog(
-                "$class: child $$ detects configuration but local "
-                  . 'storage is locked, continues to work with the old one',
-                'debug'
-            );
-            return 1;
-        }
-        $childLock = 1;
-        $class->globalInit($args);
-        $childLock = 0;
-        return 1;
+sub testConf {
+    my ( $class, $local ) = @_;
+    my $conf = $lmConf->getConf( { local => $local } );
+    unless ( ref($conf) ) {
+        $class->lmLog( "$class: Unable to load configuration : $Lemonldap::NG::Common::Conf::msg", 'error' );
+        return $cfgNum ? OK : SERVER_ERROR;
     }
-    return 0;
-}
-
-sub localConfUpdate($$) {
-    my ( $class, $r ) = @_;
-    my $args;
-    return SERVER_ERROR unless ($refLocalStorage);
-    unless ( $args = $refLocalStorage->get("conf") and $class->confTest($args) )
-    {
-
-        # TODO: LOCK
-        #unless ( $class->confTest($args) ) {
-        $class->globalConfUpdate($r);
-        #}
-        # TODO: UNLOCK;
-    }
+    if ( $cfgNum != $conf->{cfgNum} ) {
+        $class->lmLog( "$class: get configuration ($Lemonldap::NG::Common::Conf::msg)",
+            'debug' );
     $lastReload = time();
-    OK;
-}
-
-sub globalConfUpdate {
-    my $class = shift;
-    my $tmp   = $class->getConf;
-
-    # getConf can return an Apache constant in case of error
-    return $tmp unless ( ref($tmp) );
-
-    # Local arguments have a best precedence
-    foreach ( keys %$tmp ) {
-        $tmp->{$_} = $localConfig->{$_} if ( $localConfig->{$_} );
+        return $class->setConf($conf);
     }
-    $class->setConf($tmp);
+    $class->lmLog( "$class: configuration is up to date", 'debug' );
     OK;
 }
 
 sub setConf {
-    my ( $class, $args ) = @_;
-    $cfgNum++;
-    $args->{_n_conf} = $cfgNum;
-    $refLocalStorage->set( "conf", $args, $EXPIRES_NEVER );
-    $class->lmLog( "$class: store configuration " . $args->{cfgNum}, 'debug' );
-    $class->globalInit($args);
+    my ( $class, $conf ) = @_;
+
+    # Local configuration overrides global configuration
+    $cfgNum = $conf->{cfgNum};
+    $conf->{$_} = $localConfig->{$_} foreach ( keys %$localConfig );
+    $class->globalInit($conf);
+    OK;
 }
 
-sub getConf {
-    my $class = shift;
-    my $tmp   = $lmConf->getConf;
-    unless ( ref($tmp) ) {
-        $class->lmLog( "$class: Unable to load configuration", 'error' );
-        return SERVER_ERROR;
-    }
-    $class->lmLog( "$class: get configuration " . $tmp->{cfgNum}, 'debug' );
-    return $tmp;
-}
+# RELOAD SYSTEM
+
+*reload = *refresh;
 
 sub refresh($$) {
     my ( $class, $r ) = @_;
     $class->lmLog( "$class: request for configuration reload", 'notice' );
     $r->handler("perl-script");
+    if ( $class->testConf(0) == OK ) {
     if ( MP() == 2 ) {
-        if ( $class->globalConfUpdate($r) == OK ) {
             $r->push_handlers( 'PerlResponseHandler' =>
                   sub { my $r = shift; $r->content_type('text/plain'); OK } );
         }
-        else {
-            $r->push_handlers( 'PerlResponseHandler' => sub { SERVER_ERROR } );
-        }
-    }
-    else {
-        if ( $class->globalConfUpdate($r) == OK ) {
+        elsif ( MP() == 1 ) {
             $r->push_handlers(
                 'PerlHandler' => sub { my $r = shift; $r->send_http_header; OK }
             );
         }
         else {
+            return 1;
+        }
+    }
+    else {
+        if ( MP() == 2 ) {
+            $r->push_handlers( 'PerlResponseHandler' => sub { SERVER_ERROR } );
+        }
+        elsif ( MP() == 1 ) {
             $r->push_handlers( 'PerlHandler' => sub { SERVER_ERROR } );
+        }
+        else {
+            return 0;
         }
     }
     return OK;
@@ -271,10 +218,6 @@ the database.
 Like L<Lemonldap::NG::Handler::Simple>::init() but read only localStorage
 related options. You may change default time between two configuration checks
 with the C<reloadTime> parameter (default 600s).
-
-=head3 getConf
-
-Call Lemonldap::NG::Manager::Conf with the configStorage parameter.
 
 =head1 OPERATION
 

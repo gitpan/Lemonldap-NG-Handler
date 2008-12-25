@@ -76,7 +76,7 @@ about the way the user will choose. When configuring your Web-SSO, you have to:
  * create an array foreach virtual host associating URI regular expressions and
    Perl expressions to use to grant access.
 
-Example (See Lemonldap::NG::Manager::Conf(3) to see how configuration is stored
+Example (See Lemonldap::NG::Common::Conf(3) to see how configuration is stored)
 
  * Exported variables :
 
