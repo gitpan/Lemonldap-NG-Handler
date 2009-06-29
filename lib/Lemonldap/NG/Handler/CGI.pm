@@ -1,3 +1,8 @@
+## @file
+# Auto-protected CGI machanism
+
+## @class
+# Base class for auto-protected CGI
 package Lemonldap::NG::Handler::CGI;
 
 use strict;
@@ -9,17 +14,26 @@ use MIME::Base64;
 use base qw(Lemonldap::NG::Common::CGI);
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
+#link Lemonldap::NG::Handler::_CGI protected _handler
 
-our $VERSION = '0.2';
+our $_handler;
 
+our $VERSION = '0.3';
+
+## @cmethod Lemonldap::NG::Handler::CGI new(hashRef args)
+# Constructor.
+# @param $args hash passed to Lemonldap::NG::Handler::_CGI object
+# @return new object
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new() or $class->abort("Unable to build CGI");
-    $self->{_handler} = bless {}, 'Lemonldap::NG::Handler::_CGI';
-    $self->_handler->init(@_);
-    $self->_handler->initLocalStorage();
+    unless($_handler) {
+        $_handler = bless {}, 'Lemonldap::NG::Handler::_CGI';
+        $_handler->init(@_);
+        $_handler->initLocalStorage();
+    }
     $class->abort("Unable to get configuration")
-      unless $self->_handler->testConf() == OK;
+      unless $_handler->testConf() == OK;
     # Arguments
     my @args = @_;
     if(ref($args[0])) {
@@ -55,6 +69,11 @@ sub new {
     return $self;
 }
 
+## @method boolean authenticate()
+# Checks if user session is valid.
+# Checks Lemonldap::NG cookie and search session in sessions database.
+# If nothing is found, redirects the user to the Lemonldap::NG portal.
+# @return boolean : true if authentication is good. Exit before else
 sub authenticate {
     my $self    = shift;
     my %cookies = fetch CGI::Cookie;
@@ -76,41 +95,62 @@ sub authenticate {
         }
     }
     # Accounting : set user in apache logs
-    $self->lmSetApacheUser($self->r, $datas->{$whatToTrace});
+    $self->setApacheUser($datas->{$whatToTrace});
+    $ENV{REMOTE_USER} = $datas->{$whatToTrace};
 
     return 1;
 }
 
+## @method boolean authorize()
+# Checks if user is authorized to access to the current request.
+# Call Lemonldap::NG::Handler::_CGI::grant() function.
+# @return boolean : true if user is granted
 sub authorize {
     my $self = shift;
-    return $self->_handler->grant( $ENV{REQUEST_URI} );
+    return $_handler->grant( $ENV{REQUEST_URI} );
 }
 
+## @method int testUri(string uri)
+# Checks if user is authorized to access to $uri.
+# Call Lemonldap::NG::Handler::_CGI::grant() function.
+# @param $uri URI or URL to test
+# @return int : 1 if user is granted, -1 if virtual host has no configuration,
+# 0 if user isn't granted
 sub testUri {
     my $self = shift;
     my $uri  = shift;
     my $host = ( $uri =~ s#^(?:https?://)?([^/]*)/#/# ) ? $1 : $ENV{SERVER_NAME};
-    return -1 unless ( $self->_handler->vhostAvailable($host) );
-    return $self->_handler->grant( $uri, $host );
+    return -1 unless ( $_handler->vhostAvailable($host) );
+    return $_handler->grant( $uri, $host );
 }
 
+## @method hashRef user()
+# @return hash of user datas
 sub user {
     return $datas;
 }
 
+## @method boolean group(string group)
+# @param $group name of the Lemonldap::NG group to test
+# @return boolean : true if user is in this group
 sub group {
     my ( $self, $group ) = @_;
     return ( $datas->{groups} =~ /\b$group\b/ );
 }
 
+## @method void goToPortal()
+# Redirects the user to the portal and exit.
 sub goToPortal {
     my $self = shift;
-    my $tmp  = encode_base64( $self->_uri );
-    $tmp =~ s/[\r\n]//sg;
-    print CGI::redirect( -uri => "$portal?url=$tmp" );
+    my $tmp = encode_base64( $self->_uri, '' );
+    print CGI::redirect(
+        -uri => Lemonldap::NG::Handler::_CGI->portal() . "?url=$tmp" );
     exit;
 }
 
+## @fn private string _uri()
+# Builds current URL including "http://" and server name.
+# @return URL_string
 sub _uri {
     return 'http'
       . ( $https ? 's' : '' ) . '://'
@@ -118,31 +158,47 @@ sub _uri {
       . $ENV{REQUEST_URI};
 }
 
-sub _handler {
-    return shift->{_handler};
-}
-
+## @class
+# Private class used by Lemonldap::NG::Handler::CGI for his internal handler.
 package Lemonldap::NG::Handler::_CGI;
 
-use Lemonldap::NG::Handler::SharedConf qw(:locationRules :localStorage);
+use Lemonldap::NG::Handler::SharedConf qw(:locationRules :localStorage :traces);
 
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
+## @method boolean childInit()
+# Since this is not a real Apache handler, childs have not to be initialized.
+# @return true
 sub childInit {1}
 
+## @method boolean purgeCache()
+# Since this is not a real Apache handler, it must not purge the cache at starting.
+# @return true
 sub purgeCache {1}
 
+## @method void lmLog(string message,string level)
+# Replace lmLog by "print STDERR $message".
+# @param $message Message to log
+# @param $level error level (debug, info, warning or error)
 sub lmLog {
     my ( $self, $mess, $level ) = @_;
     $mess =~ s/^.*HASH[^:]*:/__PACKAGE__/e;
     print STDERR "$mess\n" unless ( $level eq 'debug' );
 }
 
+## @method boolean vhostAvailable(string vhost)
+# Checks if $vhost has been declared in configuration
+# @param $vhost Virtual Host to test
+# @return boolean : true if $vhost is available
 sub vhostAvailable {
     my ( $self, $vhost ) = @_;
     return defined( $defaultCondition->{$vhost} );
 }
 
+## @method boolean grant(string uri, string vhost)
+# Return true if user is granted to access.
+# @param $uri URI string
+# @param $vhost Optional virtual host (default current virtual host)
 sub grant {
     my ( $self, $uri, $vhost ) = @_;
     $vhost ||= $ENV{SERVER_NAME};

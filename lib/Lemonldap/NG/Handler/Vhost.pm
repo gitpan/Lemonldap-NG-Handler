@@ -1,17 +1,33 @@
+## @file
+# Virtual host support mechanism
+
+## @class
+# This class adds virtual host support for Lemonldap::NG handlers.
 package Lemonldap::NG::Handler::Vhost;
 
-use Lemonldap::NG::Handler::Simple qw(:locationRules :headers);
+use Lemonldap::NG::Handler::Simple qw(:locationRules :headers); #inherits
 use strict;
 use MIME::Base64;
 
-our $VERSION = '0.54';
+our $VERSION = '0.55';
 
-# TODO: split locationRules into 2 arrays
+## @cmethod void locationRulesInit(hashRef args)
+# Compile rules.
+# Rules are stored in $args->{locationRules}->{&lt;virtualhost&gt;} that contains
+# regexp=>test expressions where :
+# - regexp is used to test URIs
+# - test contains an expression used to grant the user
+#
+# This function creates 2 hashRef containing :
+# - one list of the compiled regular expressions for each virtual host
+# - one list of the compiled functions (compiled with conditionSub()) for each
+# virtual host
+# @param $args reference to the configuration hash
 sub locationRulesInit {
     my ( $class, $args ) = @_;
     foreach my $vhost ( keys %{ $args->{locationRules} } ) {
         $locationCount->{$vhost} = 0;
-        foreach ( keys %{ $args->{locationRules}->{$vhost} } ) {
+        foreach ( sort keys %{ $args->{locationRules}->{$vhost} } ) {
             if ( $_ eq 'default' ) {
                 $defaultCondition->{$vhost} =
                   $class->conditionSub(
@@ -32,6 +48,10 @@ sub locationRulesInit {
     1;
 }
 
+## @cmethod void forgeHeadersInit(hashRef args)
+# Create the &$forgeHeaders->{&lt;virtualhost&gt;} subroutines used to insert
+# headers into the HTTP request.
+# @param $args reference to the configuration hash
 sub forgeHeadersInit {
     my ( $class, $args ) = @_;
 
@@ -60,6 +80,8 @@ sub forgeHeadersInit {
     1;
 }
 
+## @cmethod void sendHeaders()
+# Launch function compiled by forgeHeadersInit() for the current virtual host
 sub sendHeaders {
     my $class = shift;
     my $vhost;
@@ -72,6 +94,9 @@ sub sendHeaders {
     }
 }
 
+## @cmethod boolean grant()
+# Grant or refuse client using compiled regexp and functions
+# @return True if the user is granted to access to the current URL
 sub grant {
     my ( $class, $uri ) = @_;
     my $vhost = $apacheRequest->hostname;

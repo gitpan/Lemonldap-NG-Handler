@@ -6,11 +6,11 @@
 # change 'tests => 1' to 'tests => last_test_to_print';
 
 BEGIN {
-    our $home=0;
-    $home++ if($ENV{DEBFULLNAME} eq 'Xavier Guimard');
+    our $home = 0;
+    $home++ if ( $ENV{DEBFULLNAME} and $ENV{DEBFULLNAME} eq 'Xavier Guimard' );
 }
 
-use Test::More tests => 1 + 8*$home;
+use Test::More tests => 1 + 8 * $home;
 BEGIN { use_ok( 'Lemonldap::NG::Handler::Simple', ':all' ) }
 
 #########################
@@ -18,7 +18,7 @@ BEGIN { use_ok( 'Lemonldap::NG::Handler::Simple', ':all' ) }
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
 
-exit unless($home);
+exit unless ($home);
 
 my $h;
 $h = bless {}, 'Lemonldap::NG::Handler::Simple';
@@ -26,7 +26,7 @@ ok(
     $h->localInit(
         {
             localStorage        => 'Cache::FileCache',
-            localStorageOptions => { 'namespace' => 'MyNamespace', },
+            localStorageOptions => { 'namespace' => 'MyNamespaceTest', },
             status              => 1
         }
     ),
@@ -50,8 +50,10 @@ ok( close($statusPipe) );
 
 sub read {
     my $ok = 0;
+
     #open LOG, '>/tmp/log';
     while (<$statusOut>) {
+
         #print LOG $_;
         $ok++ if (/^OK\s+:\s*2\s*\(2\.00\s*\/\s*mn\)$/);
         $ok++ if (/^REJECT\s+:\s*1\s*\(1\.00\s*\/\s*mn\)$/);
@@ -60,6 +62,7 @@ sub read {
             last;
         }
     }
+
     #print LOG "$ok\n";
     #close LOG;
     return ( $ok == 3 );

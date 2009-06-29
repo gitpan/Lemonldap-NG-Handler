@@ -1,11 +1,16 @@
+## @file
+# Perl based proxy used to replace mod_proxy
+
+## @class
+# Perl based proxy used to replace mod_proxy
 package Lemonldap::NG::Handler::Proxy;
 
 use strict;
 
-use Lemonldap::NG::Handler::Simple qw(:apache :headers :log);
+use Lemonldap::NG::Handler::Simple qw(:apache :headers);
 use LWP::UserAgent;
 
-our $VERSION = '0.4';
+our $VERSION = '0.41';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
@@ -18,8 +23,14 @@ BEGIN {
     *handler = ( MP() == 2 ) ? \&handler_mp2 : \&handler_mp1;
 }
 
+## @cmethod int handler_mp1()
+# Launch run() when used under mod_perl version 1
+# @return Apache constant
 sub handler_mp1 ($$) { shift->run(@_); }
 
+## @cmethod int handler_mp2()
+# Launch run() when used under mod_perl version 2
+# @return Apache constant
 sub handler_mp2 : method {
     shift->run(@_);
 }
@@ -40,6 +51,10 @@ our $class;
 # disappear.
 $UA->requests_redirectable( [] );
 
+## @cmethod int run(Apache2::RequestRec r)
+# Main proxy method.
+# Called for Apache response (PerlResponseHandler).
+# @return Apache constant
 sub run($$) {
     ( $class, $r ) = @_;
     my $url = $r->uri;
@@ -86,6 +101,9 @@ sub run($$) {
     return OK;
 }
 
+## @fn void cb_content(string chunk)
+# Send datas received from remote server to the client.
+# @param $chunk part of datas returned by HTTP server
 sub cb_content {
     my $chunk = shift;
     unless ($headers_set) {
@@ -95,6 +113,10 @@ sub cb_content {
     $r->print($chunk);
 }
 
+## @cmethod void headers(HTTP::Request response)
+# Send headers received from remote server to the client.
+# Replace "Location" header.
+# @param $response current HTTP response
 sub headers {
     $class = shift;
     my $response = shift;

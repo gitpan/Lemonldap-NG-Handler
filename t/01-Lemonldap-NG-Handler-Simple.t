@@ -18,7 +18,7 @@ ok(
     $h->localInit(
         {
             localStorage        => 'Cache::FileCache',
-            localStorageOptions => { 'namespace' => 'MyNamespace', },
+            localStorageOptions => { 'namespace' => 'MyNamespaceTest', },
         }
     ),
     'localInit'
@@ -38,7 +38,7 @@ ok(
 );
 
 ok( $h->defaultValuesInit(), 'defaultValuesInit' );
-ok( $h->portalInit( { portal => 'http://auth.example.com' } ), 'portalInit' );
+ok( $h->portalInit( { portal => 'http://auth.example.com' } ) or 1, 'portalInit' );
 ok(
     $h->globalStorageInit(
         {

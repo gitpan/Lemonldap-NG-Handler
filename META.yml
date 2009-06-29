@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Lemonldap-NG-Handler
-version:             0.9
+version:             0.91
 abstract:            The Apache protection module part of
 license:             ~
 author:              
@@ -12,8 +12,9 @@ requires:
     Cache::Cache:                  0
     CGI:                           3.08
     IO::Pipe:                      0
-    Lemonldap::NG::Common:         0.9
+    Lemonldap::NG::Common:         0.93
     LWP::UserAgent:                0
+    URI:                           0
 meta-spec:
     url:     http://module-build.sourceforge.net/META-spec-v1.3.html
     version: 1.3

@@ -1,15 +1,22 @@
+##@file
+# Auth-basic authentication with Lemonldap::NG rights management
+
+##@class
+# Auth-basic authentication with Lemonldap::NG rights management
 package Lemonldap::NG::Handler::AuthBasic;
 
 use strict;
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
-use Lemonldap::NG::Portal::SharedConf;
 use Digest::MD5 qw(md5_base64);
 use MIME::Base64;
+use SOAP::Lite;    # link protected portalRequest
 
 use base qw(Lemonldap::NG::Handler::SharedConf);
+use utf8;
+no utf8;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -25,14 +32,17 @@ BEGIN {
     }
 }
 
-# overload of run subroutine
+## @rmethod int run(Apache2::RequestRec apacheRequest)
+# overload run subroutine to implement Auth-Basic mechanism.
+# @param $apacheRequest current request
+# @return Apache constant
 sub run ($$) {
     my $class;
     ( $class, $apacheRequest ) = @_;
     if ( time() - $lastReload > $reloadTime ) {
-        unless ( $class->localConfUpdate($apacheRequest) == OK ) {
+        unless ( my $tmp = $class->testConf(1) == OK ) {
             $class->lmLog( "$class: No configuration found", 'error' );
-            return SERVER_ERROR;
+            return $tmp;
         }
     }
     return DECLINED unless ( $apacheRequest->is_initial_req );
@@ -61,54 +71,68 @@ sub run ($$) {
         # 2.2 search in the local cache if exists
         unless ( $refLocalStorage and $datas = $refLocalStorage->get($id) ) {
 
-            # 2.3 Authentication by Lemonldap::NG::Portal
-            my $portal = Lemonldap::NG::Portal::SharedConf->new(
-                {
-                    configStorage    => $Lemonldap::NG::Conf::configStorage,
-                    controlUrlOrigin => sub { PE_OK },
-                    controlExistingSession => sub { PE_OK },
-                    extractFormInfo        => sub {
-                        return PE_FORMEMPTY
-                          unless ( length( $self->{'user'} )
-                            && length( $self->{'password'} ) );
-                        PE_OK;
-                    },
-                    store        => sub { PE_OK },
-                    buildCookie  => sub { PE_OK },
-                    autoRedirect => sub { PE_OK },
-                }
-            );
-            ( $portal->{user}, $portal->{password} ) = split /:/,
-              decode_base64($user);
-            unless ( $portal->process() ) {
-                $class->lmLog( "Fail to authenticate user $user", 'notice' );
-                lmSetErrHeaderOut( $apacheRequest,
-                    'WWW-Authenticate' => 'Basic realm="Lemonldap::NG"' );
-                return AUTH_REQUIRED;
+            # 2.3 Authentication by Lemonldap::NG::Portal using SOAP request
+            my $soap =
+              SOAP::Lite->proxy( $class->portal() )
+              ->uri('urn:Lemonldap::NG::Common::CGI::SOAPService');
+            $user = decode_base64($user);
+            ( $user, $pass ) = ( $user =~ /^(.*?):(.*)$/ );
+            my $r = $soap->getCookies( $user, $pass );
+
+            # Catch SOAP errors
+            if ( $r->fault ) {
+                $class->lmLog(
+                    "SOAP request to the portal failed: "
+                      . $r->fault->{faultstring},
+                    'error'
+                );
+                return SERVER_ERROR;
             }
-            $datas->{$_} = $portal->{sessionInfo}->{$_}
-              foreach ( keys %{ $portal->{sessionInfo} } );
-            $datas->{_session_id} = $id;
+            else {
+                my $res = $r->result();
+
+                # If authentication failed, display error
+                if ( $res->{error} ) {
+                    $class->lmLog(
+                        "Authentication failed for $user "
+                          . $soap->error( 'fr', $res->{error} )->result(),
+                        'notice'
+                    );
+                    return AUTH_REQUIRED;
+                }
+                $id = $res->{cookies}->{$cookieName};
+            }
+
+            # Now, normal work to find session
+            my %h;
+            eval { tie %h, $globalStorage, $id, $globalStorageOptions; };
+            if ($@) {
+
+                # The cookie isn't yet available
+                $class->lmLog( "The cookie $id isn't yet available: $@",
+                    'info' );
+                $class->updateStatus( $apacheRequest->connection->remote_ip,
+                    $apacheRequest->uri, 'EXPIRED' );
+                return $class->goToPortal($uri);
+            }
+            $datas->{$_} = $h{$_} foreach ( keys %h );
 
             # Store now the user in the local storage
             if ($refLocalStorage) {
                 $refLocalStorage->set( $id, $datas, "20 minutes" );
             }
+            untie %h;
         }
     }
 
     # ACCOUNTING
     # 1 - Inform Apache
-    lmSetApacheUser( $apacheRequest, $datas->{$whatToTrace} );
+    $class->lmSetApacheUser( $apacheRequest, $datas->{$whatToTrace} );
 
     # AUTHORIZATION
     return $class->forbidden($uri) unless ( $class->grant($uri) );
-    $class->lmLog(
-        "User "
-          . $datas->{$whatToTrace}
-          . " was authorizated to access to $uri",
-        'debug'
-    );
+    $class->updateStatus( $datas->{$whatToTrace}, $apacheRequest->uri, 'OK' );
+    $class->logGranted($uri);
 
     # ACCOUNTING
     # 2 - Inform remote application
@@ -117,6 +141,9 @@ sub run ($$) {
     # SECURITY
     # Hide Lemonldap::NG cookie
     $class->hideCookie;
+
+    # Hide user password
+    lmSetHeaderIn( $apacheRequest, Authorization => '' );
     OK;
 }
 

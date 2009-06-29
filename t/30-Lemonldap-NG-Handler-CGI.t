@@ -29,7 +29,9 @@ ok(
                 type    => "File",
                 dirName => '/tmp/',
             },
-            https => 0,
+            https         => 0,
+            portal        => 'http://auth.example.com',
+            globalStorage => 'Apache::Session::File',
         }
     ),
     'Portal object'

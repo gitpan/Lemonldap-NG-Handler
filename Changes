@@ -1,5 +1,14 @@
 Revision history for Perl extension Lemonldap::NG::Handler.
 
+0.91  Mon Jun 29 11:54:02 2009
+	- CDA in core
+	- AuthBasic now use SOAP
+	- POST requests generation (used to post login/password in non
+	  compatible applications)
+	- logs written in PerlLogHandler
+	- Sympa auto login handler
+	- Double session mechanism (1 secured and the other not)
+
 0.9   Thu Dec 25 8:43:55 2008
 	- Configuration now managed by Lemonldap::NG::Common::Conf
 	- Custom functions

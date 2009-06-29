@@ -1,45 +1,26 @@
+##@file
+# Cross-domain mechanism for handler
+
+##@class
+# Cross-domain mechanism for handler
 package Lemonldap::NG::Handler::CDA;
 
 use strict;
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
-*EXPORT_TAGS = *Lemonldap::NG::Handler::SharedConf::EXPORT_TAGS;
-*EXPORT_OK   = *Lemonldap::NG::Handler::SharedConf::EXPORT_OK;
-
+## @rmethod int run(Apache2::RequestRec apacheRequest)
+# overload run subroutine to implement cross-domain mechanism.
+# @param $apacheRequest
+# @return Apache constant
 sub run ($$) {
     my $class;
-    ( $class, $apacheRequest ) = @_;
-    my $args = $apacheRequest->args;
-    if ( $args =~ s/[\?&]?($cookieName=\w+)$//oi ) {
-        my $str = $1;
-        $class->lmLog(
-            "Found a CDA id. Redirecting  "
-              . $apacheRequest->connection->remote_ip
-              . " to myself with new cookie",
-            'debug'
-        );
-        $apacheRequest->args($args);
-        my $host = $apacheRequest->get_server_name();
-        lmSetErrHeaderOut( $apacheRequest,
-                'Location' => "http"
-              . ( $https ? 's' : '' )
-              . "://$host"
-              . $apacheRequest->uri
-              . ( $apacheRequest->args ? "?" . $apacheRequest->args : "" ) );
-        $host =~ s/^[^\.]+\.(.*\..*$)/$1/;
-        lmSetErrHeaderOut( $apacheRequest,
-            'Set-Cookie' => "$str; domain=$host; path=/"
-              . ( $cookieSecured ? "; secure" : "" ) );
-        return REDIRECT;
-    }
-    else {
-        return $class->SUPER::run($apacheRequest);
-    }
+    $cda = 1;
+    return $class->SUPER::run($apacheRequest);
 }
 
 1;
@@ -55,9 +36,10 @@ mechanisms with Cross-Domain-Authentication.
 New usage:
 
   package My::Package;
-  use Lemonldap::NG::Handler::CDA;
-  @ISA = qw(Lemonldap::NG::Handler::CDA);
+  use Lemonldap::NG::Handler;
+  @ISA = qw(Lemonldap::NG::Handler);
   __PACKAGE__->init ( {
+    cda                 => 1,
     localStorage        => "Cache::FileCache",
     localStorageOptions => {
         'namespace' => 'MyNamespace',
@@ -97,7 +79,7 @@ configuration reload, so you don't need to restart Apache at each change :
 
 This library inherit from L<Lemonldap::NG::Handler::SharedConf> and add the
 capability to control users that are authenticated with a
-L<Lemonldap::NG::portal::CDA> CGI in another domain.
+L<Lemonldap::NG::Portal::CDA> CGI in another domain.
 
 =head2 EXPORT
 

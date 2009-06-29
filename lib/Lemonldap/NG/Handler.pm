@@ -1,8 +1,13 @@
+## @file
+# Alias for Lemonldap::NG::Handler::SharedConf
+
+## @class
+# Alias for Lemonldap::NG::Handler::SharedConf
 package Lemonldap::NG::Handler;
 
-print STDERR
-"See Lemonldap::NG::Handler(3) to know which Lemonldap::NG::Handler::* module to use.";
-our $VERSION = "0.9";
+our $VERSION = "0.91";
+use Lemonldap::NG::Handler::SharedConf;
+use base qw(Lemonldap::NG::Handler::SharedConf);
 
 1;
 
