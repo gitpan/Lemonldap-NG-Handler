@@ -34,7 +34,7 @@ open F, $html_file or die "Template \"$html_file\" not found !";
 # HTTP Headers
 print $cgi->header(
     -type    => 'text/html',
-    -charset => 'ISO-8859-1',
+    -charset => 'UTF-8',
 );
 
 while(<F>) {

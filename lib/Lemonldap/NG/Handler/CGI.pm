@@ -14,11 +14,10 @@ use MIME::Base64;
 use base qw(Lemonldap::NG::Common::CGI);
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
+
 #link Lemonldap::NG::Handler::_CGI protected _handler
 
-our $_handler;
-
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 ## @cmethod Lemonldap::NG::Handler::CGI new(hashRef args)
 # Constructor.
@@ -27,43 +26,51 @@ our $VERSION = '0.3';
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new() or $class->abort("Unable to build CGI");
-    unless($_handler) {
-        $_handler = bless {}, 'Lemonldap::NG::Handler::_CGI';
-        $_handler->init(@_);
-        $_handler->initLocalStorage();
+    $Lemonldap::NG::Handler::_CGI::_cgi = $self;
+    unless ($Lemonldap::NG::Handler::_CGI::cookieName) {
+        Lemonldap::NG::Handler::_CGI->init(@_);
+        Lemonldap::NG::Handler::_CGI->initLocalStorage(@_);
     }
     $class->abort("Unable to get configuration")
-      unless $_handler->testConf() == OK;
+      unless Lemonldap::NG::Handler::_CGI->testConf() == OK;
+
     # Arguments
     my @args = @_;
-    if(ref($args[0])) {
-        %$self = (%$self,%{$args[0]});
+    if ( ref( $args[0] ) ) {
+        %$self = ( %$self, %{ $args[0] } );
     }
     else {
-        %$self = (%$self,@args);
+        %$self = ( %$self, @args );
     }
+
     # Protection
     if ( $self->{protection} ) {
         $self->authenticate();
+
         # ACCOUNTING
         if ( $self->{protection} =~ /^manager$/i ) {
-            $self->authorize() or $self->abort( 'Forbidden',
+            $self->authorize()
+              or $self->abort( 'Forbidden',
                 "You don't have rights to access this page" );
         }
         elsif ( $self->{protection} =~ /rule\s*:\s*(.*)\s*$/i ) {
             my $rule = $1;
             $rule =~ s/\$date/&POSIX::strftime("%Y%m%d%H%M%S",localtime())/e;
             $rule =~ s/\$(\w+)/\$datas->{$1}/g;
-            $rule = 0 if($rule eq 'deny');
+            $rule = 0 if ( $rule eq 'deny' );
             my $r;
-            unless ( $rule eq 'accept' or $safe->reval($rule) ) {
+            unless ( $rule eq 'accept'
+                or Lemonldap::NG::Handler::_CGI->safe->reval($rule) )
+            {
                 $self->abort( 'Forbidden',
                     "You don't have rights to access this page" );
             }
         }
         elsif ( $self->{protection} !~ /^authenticate$/i ) {
-            $self->abort( 'Bad configuration',
-                "The rule <code>" . $self->{protection} . "</code> is not known" );
+            $self->abort(
+                'Bad configuration',
+                "The rule <code>" . $self->{protection} . "</code> is not known"
+            );
         }
     }
     return $self;
@@ -94,8 +101,9 @@ sub authenticate {
             }
         }
     }
+
     # Accounting : set user in apache logs
-    $self->setApacheUser($datas->{$whatToTrace});
+    $self->setApacheUser( $datas->{$whatToTrace} );
     $ENV{REMOTE_USER} = $datas->{$whatToTrace};
 
     return 1;
@@ -107,7 +115,7 @@ sub authenticate {
 # @return boolean : true if user is granted
 sub authorize {
     my $self = shift;
-    return $_handler->grant( $ENV{REQUEST_URI} );
+    return Lemonldap::NG::Handler::_CGI->grant( $ENV{REQUEST_URI} );
 }
 
 ## @method int testUri(string uri)
@@ -119,9 +127,10 @@ sub authorize {
 sub testUri {
     my $self = shift;
     my $uri  = shift;
-    my $host = ( $uri =~ s#^(?:https?://)?([^/]*)/#/# ) ? $1 : $ENV{SERVER_NAME};
-    return -1 unless ( $_handler->vhostAvailable($host) );
-    return $_handler->grant( $uri, $host );
+    my $host =
+      ( $uri =~ s#^(?:https?://)?([^/]*)/#/# ) ? $1 : $ENV{SERVER_NAME};
+    return -1 unless ( Lemonldap::NG::Handler::_CGI->vhostAvailable($host) );
+    return Lemonldap::NG::Handler::_CGI->grant( $uri, $host );
 }
 
 ## @method hashRef user()
@@ -152,7 +161,8 @@ sub goToPortal {
 # Builds current URL including "http://" and server name.
 # @return URL_string
 sub _uri {
-    return 'http'
+    return
+        'http'
       . ( $https ? 's' : '' ) . '://'
       . $ENV{SERVER_NAME}
       . $ENV{REQUEST_URI};
@@ -162,28 +172,30 @@ sub _uri {
 # Private class used by Lemonldap::NG::Handler::CGI for his internal handler.
 package Lemonldap::NG::Handler::_CGI;
 
+use strict;
 use Lemonldap::NG::Handler::SharedConf qw(:locationRules :localStorage :traces);
 
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
+our $_cgi;
+
 ## @method boolean childInit()
 # Since this is not a real Apache handler, childs have not to be initialized.
 # @return true
-sub childInit {1}
+sub childInit { 1 }
 
 ## @method boolean purgeCache()
 # Since this is not a real Apache handler, it must not purge the cache at starting.
 # @return true
-sub purgeCache {1}
+sub purgeCache { 1 }
 
 ## @method void lmLog(string message,string level)
 # Replace lmLog by "print STDERR $message".
 # @param $message Message to log
 # @param $level error level (debug, info, warning or error)
 sub lmLog {
-    my ( $self, $mess, $level ) = @_;
-    $mess =~ s/^.*HASH[^:]*:/__PACKAGE__/e;
-    print STDERR "$mess\n" unless ( $level eq 'debug' );
+    my $class = shift;
+    $_cgi->lmLog(@_);
 }
 
 ## @method boolean vhostAvailable(string vhost)
@@ -202,6 +214,13 @@ sub vhostAvailable {
 sub grant {
     my ( $self, $uri, $vhost ) = @_;
     $vhost ||= $ENV{SERVER_NAME};
+    $apacheRequest = Lemonldap::NG::Apache::Request->new(
+        {
+        uri => $uri,
+        hostname => $vhost,
+        args => '',
+        }
+    );
     for ( my $i = 0 ; $i < $locationCount->{$vhost} ; $i++ ) {
         if ( $uri =~ $locationRegexp->{$vhost}->[$i] ) {
             return &{ $locationCondition->{$vhost}->[$i] }($datas);
@@ -215,6 +234,26 @@ sub grant {
         return 0;
     }
     return &{ $defaultCondition->{$vhost} }($datas);
+}
+
+package Lemonldap::NG::Apache::Request;
+
+sub new {
+    my $class = shift;
+    my $self = shift;
+    return bless $self, $class;
+}
+
+sub hostname {
+    return $_[0]->{hostname};
+}
+
+sub uri {
+    return $_[0]->{uri};
+}
+
+sub args {
+    return $_[0]->{args};
 }
 
 1;

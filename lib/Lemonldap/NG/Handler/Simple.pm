@@ -26,7 +26,7 @@ require POSIX;
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '0.91';
+our $VERSION = '0.92';
 
 our %EXPORT_TAGS;
 
@@ -58,7 +58,7 @@ BEGIN {
         locationRules => [
             qw(
               $locationCondition $defaultCondition $locationCount
-              $locationRegexp $apacheRequest $datas $safe safe $customFunctions
+              $locationRegexp $apacheRequest $datas safe $customFunctions
               )
         ],
         import  => [qw( import @EXPORT_OK @EXPORT %EXPORT_TAGS )],
@@ -338,8 +338,10 @@ sub statusProcess {
 # @return Safe object
 sub safe {
     my $class = shift;
-    return $safe if ($safe);
-    $safe = new Safe;
+    no strict 'refs';
+    return ${"$class\::safe"} if (${"$class\::safe"});
+    $class->lmLog( "Compiling safe jail for $class", 'debug' );
+    my $safe = new Safe;
     my @t = $customFunctions ? split( /\s+/, $customFunctions ) : ();
     foreach (@t) {
         $class->lmLog( "Custom function : $_", 'debug' );
@@ -363,7 +365,7 @@ sub safe {
         $Lemonldap::NG::Common::Safelib::functions );
     $safe->share( '&encode_base64', '$datas', '&lmSetHeaderIn',
         '$apacheRequest', '&portal', @t );
-    return $safe;
+    return ${"$class\::safe"} = $safe;
 }
 
 ## @imethod void init(hashRef args)
@@ -880,7 +882,7 @@ sub run ($$) {
               . ( $https ? 's' : '' )
               . "://$host:$portString"
               . $apacheRequest->uri
-              . ( $apacheRequest->args ? "?" . $apacheRequest->args : "" ) );
+              . ( $args ? "?" . $args : "" ) );
         $host =~ s/^[^\.]+\.(.*\..*$)/$1/;
         lmSetErrHeaderOut( $apacheRequest,
             'Set-Cookie' => "$str; domain=$host; path=/"
@@ -1020,7 +1022,7 @@ sub redirectFilter {
         # Here, we can use Apache2 functions instead of lmSetHeaderOut because
         # this function is used only with Apache2.
         $f->r->status(REDIRECT);
-        $f->r->status_line("302 Temporary Moved");
+        $f->r->status_line("303 See Other");
         $f->r->headers_out->unset('Location');
         $f->r->err_headers_out->set( 'Location' => $url );
         $f->ctx(1);
