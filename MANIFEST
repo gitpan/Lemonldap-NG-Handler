@@ -3,6 +3,11 @@ example/autoProtectedCGI.pl
 example/menu.pl
 example/MyHandler.pm
 example/MyHandlerLog4Perl.pm
+example/MyHandlerSympa.pm
+example/MyHandlerZimbra.pm
+example/MyUpdateCookieHandler.pm
+example/scripts/purgeLocalCache
+example/scripts/purgeLocalCache.cron.d
 lib/Lemonldap/NG/Handler.pm
 lib/Lemonldap/NG/Handler/AuthBasic.pm
 lib/Lemonldap/NG/Handler/CDA.pm
@@ -12,10 +17,12 @@ lib/Lemonldap/NG/Handler/SharedConf.pm
 lib/Lemonldap/NG/Handler/Simple.pm
 lib/Lemonldap/NG/Handler/Status.pm
 lib/Lemonldap/NG/Handler/SympaAutoLogin.pm
+lib/Lemonldap/NG/Handler/UpdateCookie.pm
 lib/Lemonldap/NG/Handler/Vhost.pm
+lib/Lemonldap/NG/Handler/ZimbraPreAuth.pm
 Makefile.PL
-MANIFEST
-META.yml			Module meta-data (added by MakeMaker)
+MANIFEST			This list of files
+META.yml
 README
 t/01-Lemonldap-NG-Handler-Simple.t
 t/05-Lemonldap-NG-Handler-Vhost.t

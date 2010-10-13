@@ -6,19 +6,23 @@ package Lemonldap::NG::Handler::Status;
 use strict;
 use POSIX;
 use Data::Dumper;
+
 #inherits Cache::Cache
 
-our $VERSION  = "0.21";
+our $VERSION = '0.99';
 
 our $status   = {};
 our $activity = [];
 our $start    = int( time / 60 );
 use constant MN_COUNT => 5;
 
+our $page_title = 'Lemonldap::NG statistics';
+
 ## @fn private hashRef portalTab()
 # @return Constant hash used to convert error codes into string.
 sub portalTab {
     return {
+        -3 => 'PE_INFO',
         -2 => 'PORTAL_REDIRECT',
         -1 => 'PORTAL_ALREADY_AUTHENTICATED',
         0  => 'PORTAL_OK',
@@ -32,18 +36,33 @@ sub portalTab {
         8  => 'PORTAL_APACHESESSIONERROR',
         9  => 'PORTAL_FIRSTACCESS',
         10 => 'PORTAL_BADCERTIFICATE',
-        11 => 'PORTAL_LA_FAILED',
-        12 => 'PORTAL_LA_ARTFAILED',
-        13 => 'PORTAL_LA_DEFEDFAILED',
-        14 => 'PORTAL_LA_QUERYEMPTY',
-        15 => 'PORTAL_LA_SOAPFAILED',
-        16 => 'PORTAL_LA_SLOFAILED',
-        17 => 'PORTAL_LA_SSOFAILED',
-        18 => 'PORTAL_LA_SSOINITFAILED',
-        19 => 'PORTAL_LA_SESSIONERROR',
-        20 => 'PORTAL_LA_SEPFAILED',
         21 => 'PORTAL_PP_ACCOUNT_LOCKED',
         22 => 'PORTAL_PP_PASSWORD_EXPIRED',
+        23 => 'PORTAL_CERTIFICATEREQUIRED',
+        24 => 'PORTAL_ERROR',
+        25 => 'PORTAL_PP_CHANGE_AFTER_RESET',
+        26 => 'PORTAL_PP_PASSWORD_MOD_NOT_ALLOWED',
+        27 => 'PORTAL_PP_MUST_SUPPLY_OLD_PASSWORD',
+        28 => 'PORTAL_PP_INSUFFICIENT_PASSWORD_QUALITY',
+        29 => 'PORTAL_PP_PASSWORD_TOO_SHORT',
+        30 => 'PORTAL_PP_PASSWORD_TOO_YOUNG',
+        31 => 'PORTAL_PP_PASSWORD_IN_HISTORY',
+        32 => 'PORTAL_PP_GRACE',
+        33 => 'PORTAL_PP_EXP_WARNING',
+        34 => 'PORTAL_PASSWORD_MISMATCH',
+        35 => 'PORTAL_PASSWORD_OK',
+        36 => 'PORTAL_NOTIFICATION',
+        37 => 'PORTAL_BADURL',
+        38 => 'PORTAL_NOSCHEME',
+        39 => 'PORTAL_BADOLDPASSWORD',
+        40 => 'PORTAL_MALFORMEDUSER',
+        41 => 'PORTAL_SESSIONNOTGRANTED',
+        42 => 'PORTAL_CONFIRM',
+        43 => 'PORTAL_MAILFORMEMPTY',
+        44 => 'PORTAL_BADMAILTOKEN',
+        45 => 'PORTAL_MAILERROR',
+        46 => 'PORTAL_MAILOK',
+        47 => 'PORTAL_LOGOUT_OK',
     };
 }
 
@@ -78,7 +97,10 @@ sub run {
         $lastMn = $mn;
 
         # Activity collect
-        if (/^(\S+)\s+=>\s+(\S+)\s+(OK|REJECT|REDIRECT|LOGOUT|\-?\d+)$/) {
+        if (
+/^(\S+)\s+=>\s+(\S+)\s+(OK|REJECT|REDIRECT|LOGOUT|UNPROTECT|\-?\d+)$/
+          )
+        {
             my ( $user, $uri, $code ) = ( $1, $2, $3 );
 
             # Portal error translation
@@ -112,7 +134,6 @@ sub run {
             %$args = split( /[=&]/, $tmp ) if ($tmp);
             &head;
 
-            #print Dumper($args),&end;next;
             my ( $c, $m, $u );
             while ( my ( $user, $v ) = each( %{ $status->{user} } ) ) {
                 $u++ unless ( $user =~ /^\d+\.\d+\.\d+\.\d+$/ );
@@ -130,82 +151,94 @@ sub run {
                 $m->{$_} = sprintf( "%.2f", $m->{$_} / MN_COUNT );
                 $m->{$_} = int( $m->{$_} ) if ( $m->{$_} > 99 );
             }
+
+            # Raw values (Dump)
             if ( $args->{'dump'} ) {
                 print "<div id=\"dump\"><pre>\n";
                 print Dumper( $status, $activity, $count );
                 print "</pre></div>\n";
+                &end;
             }
+            else {
 
-            # Total requests
-            print "<h2>Total</h2>\n<div id=\"total\"><pre>\n";
-            print sprintf( "%-30s : \%6d (%.02f / mn)\n",
-                $_, $c->{$_}, $c->{$_} / $mn )
-              foreach ( sort keys %$c );
-            print "\n</pre></div>\n";
-
-            # Average
-            print "<h2>Average for last " . MN_COUNT
-              . " minutes</h2>\n<div id=\"average\"><pre>\n";
-            print sprintf( "%-30s : %6s / mn\n", $_, $m->{$_} )
-              foreach ( sort keys %$m );
-            print "\n</pre></div>\n";
-
-            # Users connected
-            print "<div id=\"users\"><p>\nTotal users : $u\n</p></div>\n";
-
-            # Local cache
-            my @t =
-              $refLocalStorage->get_keys( $localStorageOptions->{namespace} );
-            print "<div id=\"cache\"><p>\nLocal Cache : " . @t
-              . " objects\n</p></div>\n";
-
-            # Top uri
-            if ( $args->{top} ) {
-                print "<hr/>\n";
-                $args->{categories} ||= 'REJECT,PORTAL_FIRSTACCESS,LOGOUT,OK';
-
-                # Vhost activity
-                print
-                  "<h2>Virtual Host activity</h2>\n<div id=\"vhost\"><pre>\n";
-                foreach (
-                    sort { $count->{vhost}->{$b} <=> $count->{vhost}->{$a} }
-                    keys %{ $count->{vhost} }
-                  )
-                {
-                    print sprintf( "%-40s : %6d\n", $_, $count->{vhost}->{$_} );
-                }
+                # Total requests
+                print "<h2>Total</h2>\n<div id=\"total\"><pre>\n";
+                print sprintf( "%-30s : \%6d (%.02f / mn)\n",
+                    $_, $c->{$_}, $c->{$_} / $mn )
+                  foreach ( sort keys %$c );
                 print "\n</pre></div>\n";
 
-                # General
-                print "<h2>Top used URI</h2>\n<div id=\"uri\"><pre>\n";
-                my $i = 0;
-                foreach (
-                    sort { $count->{uri}->{$b} <=> $count->{uri}->{$a} }
-                    keys %{ $count->{uri} }
-                  )
-                {
-                    last if ( $i == $args->{top} );
-                    last unless ( $count->{uri}->{$_} );
-                    $i++;
-                    print sprintf( "%-80s : %6d\n", $_, $count->{uri}->{$_} );
-                }
+                # Average
+                print "<h2>Average for last " . MN_COUNT
+                  . " minutes</h2>\n<div id=\"average\"><pre>\n";
+                print sprintf( "%-30s : %6s / mn\n", $_, $m->{$_} )
+                  foreach ( sort keys %$m );
                 print "\n</pre></div>\n";
 
-                # Top by category
-                print
-"<table border=\"1\" width=\"100%\"><tr><th>Code</th><th>Top</ht></tr>\n";
-                foreach my $cat ( split /,/, $args->{categories} ) {
+                # Users connected
+                print "<div id=\"users\"><p>\nTotal users : $u\n</p></div>\n";
+
+                # Local cache
+                my @t =
+                  $refLocalStorage->get_keys(
+                    $localStorageOptions->{namespace} );
+                print "<div id=\"cache\"><p>\nLocal Cache : " . @t
+                  . " objects\n</p></div>\n";
+
+                # Uptime
+                print "<div id=\"up\"><p>\nServer up for : "
+                  . &timeUp($mn)
+                  . "\n</p></div>\n";
+
+                # Top uri
+                if ( $args->{top} ) {
+                    print "<hr/>\n";
+                    $args->{categories} ||=
+                      'REJECT,PORTAL_FIRSTACCESS,LOGOUT,OK';
+
+                    # Vhost activity
                     print
-"<tr><td><pre>$cat</pre></td><td nowrap>\n<div id=\"$cat\">\n";
-                    topByCat( $cat, $args->{top} );
-                    print "</div>\n</td></tr>";
+"<h2>Virtual Host activity</h2>\n<div id=\"vhost\"><pre>\n";
+                    foreach (
+                        sort { $count->{vhost}->{$b} <=> $count->{vhost}->{$a} }
+                        keys %{ $count->{vhost} }
+                      )
+                    {
+                        print
+                          sprintf( "%-40s : %6d\n", $_, $count->{vhost}->{$_} );
+                    }
+                    print "\n</pre></div>\n";
+
+                    # General
+                    print "<h2>Top used URI</h2>\n<div id=\"uri\"><pre>\n";
+                    my $i = 0;
+                    foreach (
+                        sort { $count->{uri}->{$b} <=> $count->{uri}->{$a} }
+                        keys %{ $count->{uri} }
+                      )
+                    {
+                        last if ( $i == $args->{top} );
+                        last unless ( $count->{uri}->{$_} );
+                        $i++;
+                        print
+                          sprintf( "%-80s : %6d\n", $_, $count->{uri}->{$_} );
+                    }
+                    print "\n</pre></div>\n";
+
+                    # Top by category
+                    print
+"<table class=\"topByCat\"><tr><th style=\"width:20%\">Code</th><th>Top</th></tr>\n";
+                    foreach my $cat ( split /,/, $args->{categories} ) {
+                        print
+                          "<tr><td>$cat</td><td nowrap>\n<div id=\"$cat\">\n";
+                        topByCat( $cat, $args->{top} );
+                        print "</div>\n</td></tr>";
+                    }
+                    print "</table>\n";
                 }
-                print "</table>\n";
+
+                &end;
             }
-            print "<div id=\"up\"><p>\nServer up for : "
-              . &timeUp($mn)
-              . "\n</p></div>\n";
-            &end;
         }
     }
 }
@@ -228,7 +261,7 @@ sub timeUp {
 # @param $cat Category to display
 # @param $max Number of lines to display
 sub topByCat {
-    my ( $cat, $max ) = @_;
+    my ( $cat, $max ) = splice @_;
     my $i = 0;
     print "<pre>\n";
     foreach (
@@ -253,11 +286,76 @@ sub head {
          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
 <head>
-<title>Lemonldap::NG Status</title>
+<title>$page_title</title>
+<style type="text/css">
+<!--
+body{
+	background: #000;
+	color:#fff;
+	padding:10px 50px;
+	font-family:sans-serif;
+}
+h1 {
+	margin:5px 20px;
+}
+h2 {
+	margin:30px 0 0 0;
+	padding:0 10px;
+	border-left:20px solid orange;
+	line-height:20px;
+}
+hr {
+	height:1px;
+	background-color:orange;
+	margin:10px 0;
+	border:0;
+}
+a {
+	color:orange;
+	text-decoration:none;
+	font-weight:bold;
+}
+#footer {
+	text-align:center;
+}
+#footer a {
+	margin-left:10px;
+	padding:5px;
+	border-bottom:1px solid #fff;
+}
+#footer a:hover {
+	border-color:orange;
+}
+table.topByCat {
+	table-layout:fixed;
+	border-collapse:collapse;
+	border:1px solid #fff;
+	width:100%;
+}
+table.topByCat td, table.topByCat th {
+	padding:5px;
+	border:1px solid #fff;
+}
+table.topByCat th {
+	color:orange;
+	text-align:center;
+}
+-->
+</style>
 <meta http-equiv="Content-Type" content="text/html; charset=utf8" />
 </head>
 <body>
-<h1>Lemonldap::NG Status</h1>
+<table>
+<tr>
+<td style="width:30px;height:30px;background:orange;">&nbsp;</td>
+<td>&nbsp;</td>
+<td rowspan=2><h1>$page_title</h1></td>
+</tr>
+</tr>
+<td>&nbsp;</td>
+<td style="width:30px;height:30px;background:orange;">&nbsp;</td>
+</tr>
+</table>
 EOF
 }
 
@@ -266,22 +364,29 @@ EOF
 sub end {
     print <<"EOF";
 <hr/>
+<div id="footer">
 <script type="text/javascript" language="Javascript">
   //<!--
   var a = document.location.href;
   a=a.replace(/\\?.*\$/,'');
+  document.write('<a href="'+a+'">Standard view</a>');
   document.write('<a href="'+a+'?top=10&categories=REJECT,PORTAL_FIRSTACCESS,LOGOUT,OK">Top 10</a>');
+  document.write('<a href="'+a+'?dump=1">Raw results</a>');
   //-->
 </script>
+</div>
 </body>
 </html>
 END
 EOF
 }
+
 1;
 __END__
 
 =head1 NAME
+
+=encoding utf8
 
 Lemonldap::NG::Handler::Status - Perl extension to add a mod_status like system for L<Lemonldap::NG::Handler>
 
@@ -308,7 +413,7 @@ Create your own package (example using a central configuration database):
         dbiUser             => "lemonldap",
         dbiPassword          => "password",
     }
-    # ... See Lemonldap::N::Handler
+    # ... See Lemonldap::NG::Handler
   } );
 
 =head2 Configure Apache

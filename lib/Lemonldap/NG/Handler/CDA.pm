@@ -9,7 +9,7 @@ use strict;
 
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 
-our $VERSION = '0.2';
+our $VERSION = '0.99';
 
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -19,6 +19,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 # @return Apache constant
 sub run ($$) {
     my $class;
+    ( $class, $apacheRequest ) = splice @_;
     $cda = 1;
     return $class->SUPER::run($apacheRequest);
 }
@@ -27,6 +28,8 @@ sub run ($$) {
 __END__
 
 =head1 NAME
+
+=encoding utf8
 
 Lemonldap::NG::Handler::CDA - Module to use Lemonldap::NG::Handler
 mechanisms with Cross-Domain-Authentication.

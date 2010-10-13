@@ -5,13 +5,19 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME         => 'Lemonldap::NG::Handler',
     VERSION_FROM => 'lib/Lemonldap/NG/Handler.pm',
+    LICENSE      => 'perl',
     PMLIBDIRS    => ['lib'],
+    META_MERGE   => {
+        'recommends' => {
+            'SOAP::Lite'          => 0,
+        },
+    },
+    BUILD_REQUIRES => { 'IO::Pipe' => 0, },
     PREREQ_PM    => {
         'Apache::Session'       => 0,
         'LWP::UserAgent'        => 0,
         'Cache::Cache'          => 0,
-        'Lemonldap::NG::Common' => 0.93,
-        'IO::Pipe'              => 0,
+        'Lemonldap::NG::Common' => 0.96,
         'CGI'                   => 3.08,
         'URI'                   => 0,
     },    # e.g., Module::Name => 1.1

@@ -19,13 +19,15 @@ use strict;
 
 use Lemonldap::NG::Handler::Simple qw(:all);
 use Lemonldap::NG::Handler::Vhost;
-use Lemonldap::NG::Common::Conf;    #link protected lmConf
+use Lemonldap::NG::Common::Conf;               #link protected lmConf
+use Lemonldap::NG::Common::Conf::Constants;    #inherits
 use Cache::Cache qw($EXPIRES_NEVER);
 
 use base qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
+
 #parameter reloadTime Time in second between 2 configuration check (600)
 
-our $VERSION    = '0.71';
+our $VERSION = '0.99';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -60,9 +62,10 @@ BEGIN {
 # init is overloaded to call only localInit. globalInit is called later.
 # @param $args hash containing parameters
 sub init($$) {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
+
+    # TODO reloadTime in defaultValuesInit ?
     $reloadTime = $args->{reloadTime} || 600;
-    $localConfig = $args;
     $class->localInit($args);
 }
 
@@ -71,7 +74,7 @@ sub init($$) {
 # @param $args hash containing parameters
 # @return boolean
 sub defaultValuesInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
 
     # Local configuration overrides global configuration
     my %h = ( %$args, %$localConfig );
@@ -82,18 +85,28 @@ sub defaultValuesInit {
 # Load parameters and build the Lemonldap::NG::Common::Conf object.
 # @return boolean
 sub localInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
     die(
 "$class : unable to build configuration : $Lemonldap::NG::Common::Conf::msg"
       )
       unless ( $lmConf =
         Lemonldap::NG::Common::Conf->new( $args->{configStorage} ) );
 
+    # Get local configuration parameters
+    my $localconf = $lmConf->getLocalConf(HANDLERSECTION);
+    if ($localconf) {
+        $args->{$_} ||= $localconf->{$_} foreach ( keys %$localconf );
+    }
+
+    # Store in localConfig global variable
+    $localConfig = $args;
+
     # localStorage can be declared in configStorage or at the root or both
     foreach (qw(localStorage localStorageOptions)) {
         $args->{$_} ||= $args->{configStorage}->{$_} || $lmConf->{$_};
         $args->{configStorage}->{$_} ||= $args->{$_};
     }
+
     $class->defaultValuesInit($args);
     $class->SUPER::localInit($args);
 }
@@ -107,7 +120,7 @@ sub localInit {
 # @param $r Apache2::RequestRec object
 # @return Apache constant
 sub run($$) {
-    my ( $class, $r ) = @_;
+    my ( $class, $r ) = splice @_;
     if ( time() - $lastReload > $reloadTime ) {
         unless ( my $tmp = $class->testConf(1) == OK ) {
             $class->lmLog( "$class: No configuration found", 'error' );
@@ -127,7 +140,7 @@ sub run($$) {
 # @param $local boolean
 # @return Apache constant
 sub testConf {
-    my ( $class, $local ) = @_;
+    my ( $class, $local ) = splice @_;
     my $conf = $lmConf->getConf( { local => $local } );
     unless ( ref($conf) ) {
         $class->lmLog(
@@ -152,7 +165,7 @@ sub testConf {
 # Local parameters have best precedence on configuration parameters.
 # @return Apache constant
 sub setConf {
-    my ( $class, $conf ) = @_;
+    my ( $class, $conf ) = splice @_;
 
     # Local configuration overrides global configuration
     $cfgNum = $conf->{cfgNum};
@@ -172,7 +185,7 @@ sub setConf {
 # @param $r current request
 # @return Apache constant (OK or SERVER_ERROR)
 sub refresh($$) {
-    my ( $class, $r ) = @_;
+    my ( $class, $r ) = splice @_;
     $class->lmLog( "$class: request for configuration reload", 'notice' );
     $r->handler("perl-script");
     if ( $class->testConf(0) == OK ) {
@@ -207,6 +220,8 @@ sub refresh($$) {
 __END__
 
 =head1 NAME
+
+=encoding utf8
 
 Lemonldap::NG::Handler::SharedConf - Perl extension to use dynamic
 configuration provide by Lemonldap::NG::Manager.

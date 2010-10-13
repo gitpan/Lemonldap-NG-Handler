@@ -20,11 +20,7 @@ use strict;
 
 # Initialization
 our $cgi;
-$cgi = Lemonldap::NG::Handler::CGI->new(
-    {
-        https                    => 0,
-    }
-) or die;
+$cgi = Lemonldap::NG::Handler::CGI->new( { https => 0, } ) or die;
 
 # Authentication
 $cgi->authenticate();
@@ -37,7 +33,8 @@ print $cgi->header(
     -charset => 'UTF-8',
 );
 
-while(<F>) {
+while (<F>) {
+
     #print "TOTO" if(m#[[(https?://\S+)\s+(.*?)]]#);
     s#\[\[(https?://\S+)\s+(.*?)\]\]#&link($1,$2)#eg;
     print;
@@ -45,7 +42,7 @@ while(<F>) {
 close F;
 
 sub link {
-    my($l,$t)=@_;
+    my ( $l, $t ) = @_;
     return ( $cgi->testUri($l) ? "<a href=\"$l\">$t</a>" : "<i>$t</i>" );
 }
 

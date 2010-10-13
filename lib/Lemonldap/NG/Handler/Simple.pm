@@ -19,14 +19,15 @@ use MIME::Base64;
 use Exporter 'import';
 use Safe;
 use Lemonldap::NG::Common::Safelib;    #link protected safe Safe object
-require Data::Dumper;
 require POSIX;
+use CGI::Util 'expires';
+use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
 #inherits Cache::Cache
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '0.92';
+our $VERSION = '0.99';
 
 our %EXPORT_TAGS;
 
@@ -36,14 +37,16 @@ our @EXPORT;
 
 # Shared variables
 our (
-    $locationRegexp,       $locationCondition, $defaultCondition,
-    $forgeHeaders,         $apacheRequest,     $locationCount,
-    $cookieName,           $datas,             $globalStorage,
-    $globalStorageOptions, $localStorage,      $localStorageOptions,
-    $whatToTrace,          $https,             $refLocalStorage,
-    $safe,                 $port,              $statusPipe,
-    $statusOut,            $customFunctions,   $transform,
-    $cda,
+    $locationRegexp,     $locationCondition,   $defaultCondition,
+    $locationProtection, $defaultProtection,   $forgeHeaders,
+    $apacheRequest,      $locationCount,       $cookieName,
+    $datas,              $globalStorage,       $globalStorageOptions,
+    $localStorage,       $localStorageOptions, $whatToTrace,
+    $https,              $refLocalStorage,     $safe,
+    $port,               $statusPipe,          $statusOut,
+    $customFunctions,    $transform,           $cda,
+    $childInitDone,      $httpOnly,            $cookieExpiration,
+    $timeoutActivity,    $datasUpdate,         $useRedirectOnForbidden,
 );
 
 ##########################################
@@ -58,6 +61,7 @@ BEGIN {
         locationRules => [
             qw(
               $locationCondition $defaultCondition $locationCount
+              $locationProtection $defaultProtection $datasUpdate
               $locationRegexp $apacheRequest $datas safe $customFunctions
               )
         ],
@@ -68,10 +72,14 @@ BEGIN {
               lmSetHeaderOut lmSetErrHeaderOut $cookieName $https $port
               )
         ],
-        traces => [qw( $whatToTrace $statusPipe $statusOut )],
-        apache => [qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR )],
-        post   => [qw($transform)],
-        cda    => ['$cda'],
+        traces => [qw( $whatToTrace $statusPipe $statusOut)],
+        apache => [
+            qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR useRedirectOnForbidden )
+        ],
+        post    => [qw($transform)],
+        cda     => ['$cda'],
+        cookie  => [qw($cookieName $https $httpOnly $cookieExpiration)],
+        session => ['$timeoutActivity'],
     );
     push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach ( keys %EXPORT_TAGS );
     $EXPORT_TAGS{all} = \@EXPORT_OK;
@@ -115,6 +123,8 @@ BEGIN {
             threads::shared::share($locationRegexp);
             threads::shared::share($locationCondition);
             threads::shared::share($defaultCondition);
+            threads::shared::share($locationProtection);
+            threads::shared::share($defaultProtection);
             threads::shared::share($forgeHeaders);
             threads::shared::share($locationCount);
             threads::shared::share($cookieName);
@@ -128,6 +138,8 @@ BEGIN {
             threads::shared::share($refLocalStorage);
             threads::shared::share($statusPipe);
             threads::shared::share($statusOut);
+            threads::shared::share($timeoutActivity);
+            threads::shared::share($useRedirectOnForbidden);
         };
     }
     elsif ( MP() == 1 ) {
@@ -180,16 +192,23 @@ sub logout_mp2 : method {
 # @param $mess message to log
 # @param $level string (debug, info, warning or error)
 sub lmLog {
-    my ( $class, $mess, $level ) = @_;
+    my ( $class, $mess, $level ) = splice @_;
     die "Level is required" unless ($level);
+    my $call;
+    unless ( $level eq 'debug' ) {
+        my @tmp = caller();
+        $call = "$tmp[1] $tmp[2]:";
+    }
     if ( MP() == 2 ) {
+        Apache2::ServerRec->log->debug($call) if ($call);
         Apache2::ServerRec->log->$level($mess);
     }
     elsif ( MP() == 1 ) {
+        Apache->server->log->debug($call) if ($call);
         Apache->server->log->$level($mess);
     }
     else {
-        print STDERR "$mess\n";
+        print STDERR "[$level] $mess\n";
     }
 }
 
@@ -198,7 +217,7 @@ sub lmLog {
 # @param $r current request
 # @param $s string to use
 sub lmSetApacheUser {
-    my ( $class, $r, $s ) = @_;
+    my ( $class, $r, $s ) = splice @_;
     return unless ($s);
     if ( MP() == 2 ) {
         $r->user($s);
@@ -213,7 +232,7 @@ sub lmSetApacheUser {
 # @param $str string
 # @return string
 sub regRemoteIp {
-    my ( $class, $str ) = @_;
+    my ( $class, $str ) = splice @_;
     if ( MP() == 2 ) {
         $str =~ s/\$datas->\{ip\}/\$apacheRequest->connection->remote_ip/g;
     }
@@ -229,7 +248,7 @@ sub regRemoteIp {
 # @param $h Name of the header
 # @param $v Value of the header
 sub lmSetHeaderIn {
-    my ( $r, $h, $v ) = @_;
+    my ( $r, $h, $v ) = splice @_;
     if ( MP() == 2 ) {
         return $r->headers_in->set( $h => $v );
     }
@@ -244,7 +263,7 @@ sub lmSetHeaderIn {
 # @param $h Name of the header
 # @return Value of the header
 sub lmHeaderIn {
-    my ( $r, $h ) = @_;
+    my ( $r, $h ) = splice @_;
     if ( MP() == 2 ) {
         return $r->headers_in->{$h};
     }
@@ -259,7 +278,7 @@ sub lmHeaderIn {
 # @param $h Name of the header
 # @param $v Value of the header
 sub lmSetErrHeaderOut {
-    my ( $r, $h, $v ) = @_;
+    my ( $r, $h, $v ) = splice @_;
     if ( MP() == 2 ) {
         return $r->err_headers_out->set( $h => $v );
     }
@@ -274,7 +293,7 @@ sub lmSetErrHeaderOut {
 # @param $h Name of the header
 # @param $v Value of the header
 sub lmSetHeaderOut {
-    my ( $r, $h, $v ) = @_;
+    my ( $r, $h, $v ) = splice @_;
     if ( MP() == 2 ) {
         return $r->headers_out->set( $h => $v );
     }
@@ -289,7 +308,7 @@ sub lmSetHeaderOut {
 # @param $h Name of the header
 # @return Value of the header
 sub lmHeaderOut {
-    my ( $r, $h, $v ) = @_;
+    my ( $r, $h, $v ) = splice @_;
     if ( MP() == 2 ) {
         return $r->headers_out->{$h};
     }
@@ -312,6 +331,7 @@ sub statusProcess {
         $statusPipe->autoflush(1);
     }
     else {
+        require Data::Dumper;
         $statusPipe->reader();
         $statusOut->writer();
         my $fdin  = $statusPipe->fileno;
@@ -338,10 +358,10 @@ sub statusProcess {
 # @return Safe object
 sub safe {
     my $class = shift;
-    no strict 'refs';
-    return ${"$class\::safe"} if (${"$class\::safe"});
-    $class->lmLog( "Compiling safe jail for $class", 'debug' );
-    my $safe = new Safe;
+
+    return $safe if ($safe);
+
+    $safe = new Safe;
     my @t = $customFunctions ? split( /\s+/, $customFunctions ) : ();
     foreach (@t) {
         $class->lmLog( "Custom function : $_", 'debug' );
@@ -360,12 +380,13 @@ sub safe {
             }";
         $class->lmLog( $@, 'error' ) if ($@);
     }
-    $safe->share_from( 'main', ['%ENV'] );
+    $safe->share_from( 'main', [ '%ENV', 'APR::Table::set' ] );
     $safe->share_from( 'Lemonldap::NG::Common::Safelib',
         $Lemonldap::NG::Common::Safelib::functions );
     $safe->share( '&encode_base64', '$datas', '&lmSetHeaderIn',
         '$apacheRequest', '&portal', @t );
-    return ${"$class\::safe"} = $safe;
+
+    return $safe;
 }
 
 ## @imethod void init(hashRef args)
@@ -382,7 +403,7 @@ sub init($$) {
 # (statusProcess()) in wanted and launch childInit().
 # @param $args reference to the initialization hash
 sub localInit($$) {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
     if ( $localStorage = $args->{localStorage} ) {
         $localStorageOptions = $args->{localStorageOptions};
         $localStorageOptions->{namespace}          ||= "lemonldap";
@@ -390,9 +411,19 @@ sub localInit($$) {
         $class->purgeCache();
     }
     if ( $args->{status} ) {
-        statusProcess();
+        if ( defined $localStorage ) {
+            statusProcess();
+        }
+        else {
+
+            # localStorage is mandatory for status module
+            $class->lmLog(
+"Status module can not be loaded without localStorage parameter",
+                'warn'
+            );
+        }
     }
-    $class->childInit();
+    $class->childInit($args);
 }
 
 ## @imethod protected boolean childInit()
@@ -401,7 +432,8 @@ sub localInit($$) {
 # - cleanLocalStorage() after each requests
 # @return True
 sub childInit {
-    my $class = shift;
+    my ( $class, $args ) = splice @_;
+    return 1 if ($childInitDone);
 
     # We don't initialise local storage in the "init" subroutine because it can
     # be used at the starting of Apache and so with the "root" privileges. Local
@@ -411,14 +443,23 @@ sub childInit {
     # performances.
     no strict;
     if ( MP() == 2 ) {
-        Apache2::ServerUtil->server->push_handlers( PerlChildInitHandler =>
+        $s = Apache2::ServerUtil->server;
+        $s->push_handlers( PerlChildInitHandler =>
               sub { return $class->initLocalStorage( $_[1], $_[0] ); } );
+        $s->push_handlers(
+            PerlPostConfigHandler => sub {
+                my ( $c, $l, $t, $s ) = splice @_;
+                $s->add_version_component(
+                    'Lemonldap::NG::Handler/' . $VERSION );
+            }
+        ) unless ( $args->{hideSignature} );
     }
     elsif ( MP() == 1 ) {
         Apache->push_handlers(
             PerlChildInitHandler => sub { return $class->initLocalStorage(@_); }
         );
     }
+    $childInitDone++;
     1;
 }
 
@@ -471,101 +512,147 @@ sub globalInit {
 # - the list of the compiled functions (compiled with conditionSub())
 # @param $args reference to the configuration hash
 sub locationRulesInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
     $locationCount = 0;
 
     # Pre compilation : both regexp and conditions
     foreach ( sort keys %{ $args->{locationRules} } ) {
         if ( $_ eq 'default' ) {
-            $defaultCondition =
+            ( $defaultCondition, $defaultProtection ) =
               $class->conditionSub( $args->{locationRules}->{$_} );
         }
         else {
-            $locationCondition->[$locationCount] =
-              $class->conditionSub( $args->{locationRules}->{$_} );
+            (
+                $locationCondition->[$locationCount],
+                $locationProtection->[$locationCount]
+            ) = $class->conditionSub( $args->{locationRules}->{$_} );
             $locationRegexp->[$locationCount] = qr/$_/;
             $locationCount++;
         }
     }
 
     # Default police: all authenticated users are accepted
-    $defaultCondition = $class->conditionSub('accept')
+    ( $defaultCondition, $defaultProtection ) = $class->conditionSub('accept')
       unless ($defaultCondition);
     1;
 }
 
 ## @imethod protected codeRef conditionSub(string cond)
 # Returns a compiled function used to grant users (used by
-# locationRulesInit().
+# locationRulesInit(). The second value returned is a boolean that
+# tell if URL is protected.
 # @param $cond The boolean expression to use
+# @return array (ref(sub),boolean)
 sub conditionSub {
-    my ( $class, $cond ) = @_;
-    return sub { 1 }
+    my ( $class, $cond ) = splice @_;
+    my ( $OK, $NOK ) = ( sub { 1 }, sub { 0 } );
+
+    # Simple cases : accept and deny
+    return ( $OK, 1 )
       if ( $cond =~ /^accept$/i );
-    return sub { 0 }
+    return ( $NOK, 1 )
       if ( $cond =~ /^deny$/i );
+
+    # Case unprotect : 2nd value is 0 since this URL is not protected
+    return ( $OK, 0 )
+      if ( $cond =~ /^unprotect$/i );
+
+    # Case logout
     if ( $cond =~ /^logout(?:_sso)?(?:\s+(.*))?$/i ) {
         my $url = $1;
-        return $url
-          ? sub { $datas->{_logout} = $url;     return 0 }
-          : sub { $datas->{_logout} = portal(); return 0 };
+        return (
+            $url
+            ? ( sub { $datas->{_logout} = $url; return 0 }, 1 )
+            : ( sub { $datas->{_logout} = portal(); return 0 }, 1 )
+        );
     }
+
+    # Since filter exists only with Apache>=2, logout_app and logout_app_sso
+    # targets are available only for it.
     if ( MP() == 2 ) {
+
+        # logout_app
         if ( $cond =~ /^logout_app(?:\s+(.*))?$/i ) {
-            my $u = $1 || 'portal()';
+            my $u = $1 || $class->portal();
             eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
-            return sub {
-                $apacheRequest->add_output_filter(
-                    sub {
-                        return $class->redirectFilter( $u, @_ );
-                    }
-                );
-                1;
-            };
+            return (
+                sub {
+                    $apacheRequest->add_output_filter(
+                        sub {
+                            return $class->redirectFilter( $u, @_ );
+                        }
+                    );
+                    1;
+                },
+                1
+            );
         }
         elsif ( $cond =~ /^logout_app_sso(?:\s+(.*))?$/i ) {
             eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
-            my $u = $1 || 'portal()';
-            return sub {
-                $class->localUnlog;
-                $apacheRequest->add_output_filter(
-                    sub {
-                        return $class->redirectFilter(
-                            $class->portal() . "?url="
-                              . $class->encodeUrl($u)
-                              . "&logout=1",
-                            @_
-                        );
-                    }
-                );
-                1;
-            };
+            my $u = $1 || $class->portal();
+            return (
+                sub {
+                    $class->localUnlog;
+                    $apacheRequest->add_output_filter(
+                        sub {
+                            return $class->redirectFilter(
+                                $class->portal() . "?url="
+                                  . $class->encodeUrl($u)
+                                  . "&logout=1",
+                                @_
+                            );
+                        }
+                    );
+                    1;
+                },
+                1
+            );
         }
     }
+
+    # Replace some strings in condition
     $cond =~ s/\$date/&POSIX::strftime("%Y%m%d%H%M%S",localtime())/e;
     $cond =~ s/\$(\w+)/\$datas->{$1}/g;
     $cond =~ s/\$datas->{vhost}/\$apacheRequest->hostname/g;
-    my $sub = $class->safe->reval("sub {return ( $cond )}");
-    return $sub;
+
+    # Eval sub
+    my $sub = (
+        SAFEWRAP
+        ? $class->safe->wrap_code_ref(
+            $class->safe->reval("sub{return($cond)}")
+          )
+        : $class->safe->reval("sub{return($cond)}")
+    );
+
+    # Return sub and protected flag
+    return ( $sub, 1 );
 }
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables
 # @param $args reference to the configuration hash
 sub defaultValuesInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
 
-    # Other values
+    # Warning: first start of handler load values from MyHanlder.pm
+    # and lemonldap-ng.ini
+    # These values should be erased by global configuration!
     $cookieName  = $args->{cookieName}  || $cookieName  || 'lemonldap';
     $whatToTrace = $args->{whatToTrace} || $whatToTrace || 'uid';
     $whatToTrace =~ s/\$//g;
-    $https = $args->{https} unless defined($https);
-    $https = 1 unless defined($https);
+    $https = defined($https) ? $https : $args->{https};
     $args->{securedCookie} = 1 unless defined( $args->{securedCookie} );
     $cookieName .= 'http' if ( $args->{securedCookie} == 2 and $https == 0 );
-    $port            = $args->{port} || 0 unless defined($port);
-    $customFunctions = $args->{customFunctions};
-    $cda             = $args->{cda} || 0 unless defined($cda);
+    $port ||= $args->{port};
+    $customFunctions  = $args->{customFunctions};
+    $cda              = defined($cda) ? $cda : $args->{cda};
+    $httpOnly         = defined($httpOnly) ? $httpOnly : $args->{httpOnly};
+    $cookieExpiration = $args->{cookieExpiration} || $cookieExpiration;
+    $timeoutActivity  = $args->{timeoutActivity} || $timeoutActivity || 0;
+    $useRedirectOnForbidden =
+      defined($useRedirectOnForbidden)
+      ? $useRedirectOnForbidden
+      : $args->{useRedirectOnForbidden};
     1;
 }
 
@@ -573,7 +660,7 @@ sub defaultValuesInit {
 # Verify that portal variable exists. Die unless
 # @param $args reference to the configuration hash
 sub portalInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
     die("portal parameter required") unless ( $args->{portal} );
     if ( $args->{portal} =~ /[\$\(&\|"']/ ) {
         my $portal = $class->conditionSub( $args->{portal} );
@@ -590,7 +677,7 @@ sub portalInit {
 # Initialize the Apache::Session::* module choosed to share user's variables.
 # @param $args reference to the configuration hash
 sub globalStorageInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
     $globalStorage = $args->{globalStorage} or die "globalStorage required";
     eval "use $globalStorage;";
     die($@) if ($@);
@@ -602,7 +689,7 @@ sub globalStorageInit {
 # headers into the HTTP request.
 # @param $args reference to the configuration hash
 sub forgeHeadersInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
 
     # Creation of the subroutine who will generate headers
     my %tmp;
@@ -623,7 +710,11 @@ sub forgeHeadersInit {
           "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
           . $tmp{$_} . ")));";
     }
-    $forgeHeaders = $class->safe->reval("sub {$sub};");
+    $forgeHeaders = (
+        SAFEWRAP
+        ? $class->safe->wrap_code_ref( $class->safe->reval("sub{$sub}") )
+        : $class->safe->reval("sub{$sub}")
+    );
     $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' )
       if ($@);
     1;
@@ -633,7 +724,7 @@ sub forgeHeadersInit {
 # Prepare local cache (if not done before by Lemonldap::NG::Common::Conf)
 # @return Apache2::Const::DECLINED
 sub initLocalStorage {
-    my ( $class, $r ) = @_;
+    my ( $class, $r ) = splice @_;
     if ( $localStorage and not $refLocalStorage ) {
         eval
 "use $localStorage;\$refLocalStorage = new $localStorage(\$localStorageOptions);";
@@ -646,26 +737,52 @@ sub initLocalStorage {
 ## @imethod protected void postUrlInit()
 # Prepare methods to post form attributes
 sub postUrlInit {
-    my ( $class, $args ) = @_;
+    my ( $class, $args ) = splice @_;
+
+    # Do nothing if no POST configured
     return unless ( $args->{post} );
+
+    # Load required modules
     eval 'use Apache2::Filter;use URI';
+
+    # Prepare transform sub
     $transform = {};
+
+    #  Browse all POST URI
     while ( my ( $url, $d ) = each( %{ $args->{post} } ) ) {
+
+        # Where to POST
         $d->{postUrl} ||= $url;
+
+        # Register POST form for POST URL
         $transform->{ $d->{postUrl} } =
           sub { $class->buildPostForm( $d->{postUrl} ) }
           if ( $url ne $d->{postUrl} );
 
+        # Get datas to POST
         my $expr = $d->{expr};
-        $expr =~ s/\$(\w+)/\$datas->{$1}/g;
-        my %h = split /(?:\s*=>\s*|\s*,\s*)/, $expr;
-        my $tmp;
-        foreach ( keys %h ) {
-            $h{$_} = "'$h{$_}'" if ( $h{$_} =~ /^\w+$/ );
-            $tmp .= "'$_'=>$h{$_},";
+        my %postdata;
+
+        # Manage old and new configuration format
+        # OLD: expr => 'param1 => value1, param2 => value2',
+        # NEW : expr => { param1 => value1, param2 => value2 },
+        if ( ref $expr eq 'HASH' ) {
+            %postdata = %$expr;
         }
-        my $sub = $class->safe->reval(
-            "sub{
+        else {
+            %postdata = split /(?:\s*=>\s*|\s*,\s*)/, $expr;
+        }
+
+        # Build string for URI::query_form
+        my $tmp;
+        foreach ( keys %postdata ) {
+            $postdata{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
+            $postdata{$_} = "'$postdata{$_}'" if ( $postdata{$_} =~ /^\w+$/ );
+            $tmp .= "'$_'=>$postdata{$_},";
+        }
+
+        # Build subroutine
+        my $sub = "sub{
             my \$f = shift;
             my \$l;
             unless(\$f->ctx){
@@ -682,6 +799,11 @@ sub postUrlInit {
             }
             return OK;
         }"
+          ;
+        $sub = (
+            SAFEWRAP
+            ? $class->safe->wrap_code_ref( $class->safe->reval($sub) )
+            : $class->safe->reval($sub)
         );
         $class->lmLog( "Compiling POST request for $url", 'debug' );
         $transform->{$url} = sub {
@@ -693,6 +815,13 @@ sub postUrlInit {
     }
 }
 
+## @imethod protected buildPostForm(string url, int count)
+# Build form that will be posted by client
+# Fill an input hidden with fake value to
+# reach the size of initial request
+# @param url Target of POST
+# @param count Fake input size
+# @return Apache2::Const::OK
 sub buildPostForm {
     my $class = shift;
     my $url   = shift;
@@ -720,7 +849,7 @@ qq{<html><body onload="document.getElementById('f').submit()"><form id="f" metho
 ## @rmethod protected void updateStatus(string user,string url,string action)
 # Inform the status process of the result of the request if it is available.
 sub updateStatus {
-    my ( $class, $user, $url, $action ) = @_;
+    my ( $class, $user, $url, $action ) = splice @_;
     eval {
             print $statusPipe "$user => "
           . $apacheRequest->hostname
@@ -729,11 +858,23 @@ sub updateStatus {
     };
 }
 
-## @rmethod protected boolean grant()
+## @rmethod protected boolean isProtected()
+# @return True if URI isn't protected (rule "unprotect")
+sub isProtected {
+    my ( $class, $uri ) = splice @_;
+    for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
+        return $locationProtection->[$i]
+          if ( $uri =~ $locationRegexp->[$i] );
+    }
+    return $defaultProtection;
+}
+
+## @rmethod protected boolean grant(string uri)
 # Grant or refuse client using compiled regexp and functions
+# @param uri URI requested
 # @return True if the user is granted to access to the current URL
 sub grant {
-    my ( $class, $uri ) = @_;
+    my ( $class, $uri ) = splice @_;
     for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
         return &{ $locationCondition->[$i] }($datas)
           if ( $uri =~ $locationRegexp->[$i] );
@@ -741,12 +882,13 @@ sub grant {
     return &$defaultCondition($datas);
 }
 
-## @rmethod protected int forbidden()
+## @rmethod protected int forbidden(string uri)
 # Used to reject non authorizated requests.
 # Inform the status processus and call logForbidden().
-# @return Apache2::Const::FORBIDDEN
+# @param uri URI requested
+# @return Apache2::Const::REDIRECT or Apache2::Const::FORBIDDEN
 sub forbidden {
-    my ( $class, $uri ) = @_;
+    my ( $class, $uri ) = splice @_;
     if ( $datas->{_logout} ) {
         $class->updateStatus( $datas->{$whatToTrace}, $_[0], 'LOGOUT' );
         my $u = $datas->{_logout};
@@ -757,7 +899,16 @@ sub forbidden {
     $apacheRequest->push_handlers(
         PerlLogHandler => sub { $class->logForbidden( $uri, $datas ); DECLINED }
     );
-    return FORBIDDEN;
+
+    # Redirect or Forbidden?
+    if ($useRedirectOnForbidden) {
+        $class->lmLog( "Use redirect for forbidden access", 'debug' );
+        return $class->goToPortal( $uri, 'lmError=403' );
+    }
+    else {
+        $class->lmLog( "Return forbidden access", 'debug' );
+        return FORBIDDEN;
+    }
 }
 
 ## @rmethod protected void logForbidden(string uri,hashref datas)
@@ -766,7 +917,7 @@ sub forbidden {
 # @param $uri uri asked
 # @param $datas hash re to user's datas
 sub logForbidden {
-    my ( $class, $uri, $datas ) = @_;
+    my ( $class, $uri, $datas ) = splice @_;
     $class->lmLog(
         'User "'
           . $datas->{$whatToTrace}
@@ -781,7 +932,7 @@ sub logForbidden {
 # authorizated. This method has to be overloaded to use different logs systems
 # @param $uri uri asked
 sub logGranted {
-    my ( $class, $uri, $datas ) = @_;
+    my ( $class, $uri, $datas ) = splice @_;
     $class->lmLog(
         'User "'
           . $datas->{$whatToTrace}
@@ -797,28 +948,35 @@ sub hideCookie {
     my $class = shift;
     $class->lmLog( "$class: removing cookie", 'debug' );
     my $tmp = lmHeaderIn( $apacheRequest, 'Cookie' );
-    $tmp =~ s/$cookieName[^,;]*[,;]?//o;
+    $tmp =~ s/$cookieName(?:http)?[^,;]*[,;]?//og;
     lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
 }
 
 ## @rmethod protected string encodeUrl(string url)
 # Encode URl in the format used by Lemonldap::NG::Portal for redirections.
 sub encodeUrl {
-    my ( $class, $url ) = @_;
-    my $u = $url;
-    if ( $url !~ m#^https?://# ) {
+    my ( $class, $url ) = splice @_;
+    $url = $class->_buildUrl($url) if ( $url !~ m#^https?://# );
+    return encode_base64( $url, '' );
+}
+
+## @method private string _buildUrl(string s)
+# Transform /<s> into http(s?)://<host>:<port>/s
+# @param $s path
+# @return URL
+sub _buildUrl {
+    my ( $class, $s ) = splice @_;
         my $portString = $port || $apacheRequest->get_server_port();
         $portString =
             ( $https  && $portString == 443 ) ? ''
           : ( !$https && $portString == 80 )  ? ''
           :                                     ':' . $portString;
-        $u = "http"
+    return
+        "http"
           . ( $https ? "s" : "" ) . "://"
           . $apacheRequest->get_server_name()
           . $portString
-          . $url;
-    }
-    return encode_base64( $u, '' );
+      . $s;
 }
 
 ## @rmethod protected int goToPortal(string url, string arg)
@@ -827,7 +985,7 @@ sub encodeUrl {
 # @param $arg optionnal GET parameters
 # @return Apache2::Const::REDIRECT
 sub goToPortal {
-    my ( $class, $url, $arg ) = @_;
+    my ( $class, $url, $arg ) = splice @_;
     $class->lmLog(
         "Redirect "
           . $apacheRequest->connection->remote_ip
@@ -850,6 +1008,20 @@ sub fetchId {
     return ( $t =~ /$cookieName=([^,; ]+)/o ) ? $1 : 0;
 }
 
+## @rmethod protected transformUri(string uri)
+# Transform URI to replay POST forms
+# @param uri URI to catch
+# @return Apache2::Const
+sub transformUri {
+    my ( $class, $uri ) = splice @_;
+
+    if ( defined( $transform->{$uri} ) ) {
+        return &{ $transform->{$uri} };
+    }
+
+    OK;
+}
+
 # MAIN SUBROUTINE called by Apache (using PerlHeaderParserHandler option)
 
 ## @rmethod int run(Apache2::RequestRec apacheRequest)
@@ -866,7 +1038,7 @@ sub fetchId {
 # @return Apache2::Const value (OK, FORBIDDEN, REDIRECT or SERVER_ERROR)
 sub run ($$) {
     my $class;
-    ( $class, $apacheRequest ) = @_;
+    ( $class, $apacheRequest ) = splice @_;
     return DECLINED unless ( $apacheRequest->is_initial_req );
     my $args = $apacheRequest->args;
 
@@ -876,17 +1048,21 @@ sub run ($$) {
         $class->lmLog( 'CDA request', 'debug' );
         $apacheRequest->args($args);
         my $host = $apacheRequest->get_server_name();
-        my $portString = $port || $apacheRequest->get_server_port();
         lmSetErrHeaderOut( $apacheRequest,
-                'Location' => "http"
-              . ( $https ? 's' : '' )
-              . "://$host:$portString"
-              . $apacheRequest->uri
+            $class->_buildUrl( $apacheRequest->uri )
               . ( $args ? "?" . $args : "" ) );
         $host =~ s/^[^\.]+\.(.*\..*$)/$1/;
-        lmSetErrHeaderOut( $apacheRequest,
+        lmSetErrHeaderOut(
+            $apacheRequest,
             'Set-Cookie' => "$str; domain=$host; path=/"
-              . ( $https ? "; secure" : "" ) );
+              . ( $https    ? "; secure"   : "" )
+              . ( $httpOnly ? "; HttpOnly" : "" )
+              . (
+                $cookieExpiration
+                ? "; expires=" . expires( $cookieExpiration, 'cookie' )
+                : ""
+              )
+        );
         return REDIRECT;
     }
     my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
@@ -895,6 +1071,15 @@ sub run ($$) {
     # I - recover the cookie
     my $id;
     unless ( $id = $class->fetchId ) {
+
+        # 1.1 Ignore unprotected URIs
+        unless ( $class->isProtected($uri) ) {
+            $class->updateStatus( $apacheRequest->connection->remote_ip,
+                $apacheRequest->uri, 'UNPROTECT' );
+            return OK;
+        }
+
+        # 1.2 Redirect users to the portal
         $class->lmLog( "$class: No cookie found", 'info' );
         $class->updateStatus( $apacheRequest->connection->remote_ip,
             $apacheRequest->uri, 'REDIRECT' );
@@ -904,7 +1089,7 @@ sub run ($$) {
     # II - recover the user datas
     #  2.1 search if the user was the same as previous (very efficient in
     #      persistent connection).
-    unless ( $id eq $datas->{_session_id} ) {
+    unless ( $id eq $datas->{_session_id} and ( time() - $datasUpdate < 60 ) ) {
 
         # 2.2 search in the local cache if exists
         unless ( $refLocalStorage and $datas = $refLocalStorage->get($id) ) {
@@ -919,8 +1104,20 @@ sub run ($$) {
                     'info' );
                 $class->updateStatus( $apacheRequest->connection->remote_ip,
                     $apacheRequest->uri, 'EXPIRED' );
+
+                # For unprotected URI, user is not redirected
+                unless ( $class->isProtected($uri) ) {
+                    $class->updateStatus( $apacheRequest->connection->remote_ip,
+                        $apacheRequest->uri, 'UNPROTECT' );
+                    return OK;
+                }
                 return $class->goToPortal($uri);
             }
+
+            # Update the session to notify activity, if necessary
+            $h{_lastSeen} = time() if ($timeoutActivity);
+
+            # Store data in current shared variables
             $datas->{$_} = $h{$_} foreach ( keys %h );
 
             # Store now the user in the local storage
@@ -928,6 +1125,7 @@ sub run ($$) {
                 $refLocalStorage->set( $id, $datas, "10 minutes" );
             }
             untie %h;
+            $datasUpdate = time();
         }
     }
 
@@ -936,8 +1134,15 @@ sub run ($$) {
     $class->lmSetApacheUser( $apacheRequest, $datas->{$whatToTrace} );
 
     # AUTHORIZATION
+    my $kc = keys %$datas;
     return $class->forbidden($uri) unless ( $class->grant($uri) );
     $class->updateStatus( $datas->{$whatToTrace}, $apacheRequest->uri, 'OK' );
+
+    # Store local macros
+    if ( keys %$datas > $kc and $refLocalStorage ) {
+        $class->lmLog( "Update local cache", "debug" );
+        $refLocalStorage->set( $id, $datas, "10 minutes" );
+    }
 
     # ACCOUNTING
     # 2 - Inform remote application
@@ -947,17 +1152,15 @@ sub run ($$) {
     # Hide Lemonldap::NG cookie
     $class->hideCookie;
 
-    # Cleanup and log
+    # Log
     $apacheRequest->push_handlers(
         PerlLogHandler => sub { $class->logGranted( $uri, $datas ); DECLINED },
     );
-    $apacheRequest->push_handlers(
-        PerlCleanupHandler => sub { $class->cleanLocalStorage(@_); DECLINED },
-    );
 
-    if ( defined( $transform->{$uri} ) ) {
-        return &{ $transform->{$uri} };
-    }
+    #  Catch POST rules
+    $class->transformUri($uri);
+
+    # Return OK
     OK;
 }
 
@@ -1000,7 +1203,7 @@ sub localUnlog {
 # @return Apache2::Const value returned by goToPortal()
 sub unlog ($$) {
     my $class;
-    ( $class, $apacheRequest ) = @_;
+    ( $class, $apacheRequest ) = splice @_;
     $class->localUnlog;
     $class->updateStatus( $apacheRequest->connection->remote_ip,
         $apacheRequest->uri, 'LOGOUT' );
@@ -1047,9 +1250,12 @@ sub redirectFilter {
 # @param $r Current request
 # @return Apache2::Const::OK
 sub status($$) {
-    my ( $class, $r ) = @_;
+    my ( $class, $r ) = splice @_;
     $class->lmLog( "$class: request for status", 'debug' );
-    return SERVER_ERROR unless ( $statusPipe and $statusOut );
+    unless ( $statusPipe and $statusOut ) {
+        $class->lmLog( "$class: status page can not be displayed", 'error' );
+        return SERVER_ERROR;
+    }
     $r->handler("perl-script");
     print $statusPipe "STATUS" . ( $r->args ? " " . $r->args : '' ) . "\n";
     my $buf;
@@ -1081,22 +1287,12 @@ sub status($$) {
     return OK;
 }
 
-#################
-# OTHER METHODS #
-#################
-
-## @rmethod protected int cleanLocalStorage()
-# Clean expired values from the local cache.
-# @return Apache2::Const::DECLINED
-sub cleanLocalStorage {
-    $refLocalStorage->purge() if ($refLocalStorage);
-    return DECLINED;
-}
-
 1;
 __END__
 
 =head1 NAME
+
+=encoding utf8
 
 Lemonldap::NG::Handler::Simple - Perl base extension for building Lemonldap::NG
 compatible handler.
@@ -1214,7 +1410,7 @@ store user's datas. See L<Lemonldap::NG::Portal(3)> for more explanations.
 
 =item B<localStorage> E<amp> B<localStorageOptions>
 
-Name and parameters of the optional but recommanded Cache::* module used to
+Name and parameters of the optional but recommended Cache::* module used to
 share user's datas between Apache processes. There is no need to set expires
 options since L<Lemonldap::NG::Handler::Simple> call the Cache::*::purge
 method itself.

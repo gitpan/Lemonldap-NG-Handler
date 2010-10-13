@@ -7,10 +7,10 @@ package Lemonldap::NG::Handler::Proxy;
 
 use strict;
 
-use Lemonldap::NG::Handler::Simple qw(:apache :headers);
+use Lemonldap::NG::Handler::Simple qw(:apache :headers :traces);
 use LWP::UserAgent;
 
-our $VERSION = '0.41';
+our $VERSION = '0.99';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
@@ -35,6 +35,8 @@ sub handler_mp2 : method {
     shift->run(@_);
 }
 
+*lmLog = *Lemonldap::NG::Handler::Simple::lmLog;
+
 ########
 # MAIN #
 ########
@@ -56,7 +58,7 @@ $UA->requests_redirectable( [] );
 # Called for Apache response (PerlResponseHandler).
 # @return Apache constant
 sub run($$) {
-    ( $class, $r ) = @_;
+    ( $class, $r ) = splice @_;
     my $url = $r->uri;
     $url .= "?" . $r->args if ( $r->args );
 
@@ -85,7 +87,7 @@ sub run($$) {
 
     # copy POST data, if any
     if ( $r->method eq "POST" ) {
-        my $len = $r->header_in('Content-Length');
+        my $len = $r->headers_in->{'Content-Length'};
         my $buf;
         $r->read( $buf, $len );
         $request->content($buf);
@@ -142,7 +144,6 @@ sub headers {
             1;
         }
     );
-    $r->send_http_header;
     $headers_set = 1;
 }
 
@@ -151,6 +152,8 @@ sub headers {
 __END__
 
 =head1 NAME
+
+=encoding utf8
 
 Lemonldap::NG::Handler::Proxy - Perl extension to add a reverse-proxy to a
 Lemonldap::NG handler.
@@ -176,7 +179,7 @@ apache/conf/httpd.conf:
 
 =head1 DESCRIPTION
 
-This library adds a reverse-proxy functionnality to Apache. It is useful to
+This library adds a reverse-proxy functionality to Apache. It is useful to
 manage redirections if the remote host use it without the good domain.
 
 =head2 PARAMETERS

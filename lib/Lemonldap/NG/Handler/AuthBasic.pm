@@ -16,7 +16,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 use utf8;
 no utf8;
 
-our $VERSION = '0.2';
+our $VERSION = '0.99';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -38,7 +38,7 @@ BEGIN {
 # @return Apache constant
 sub run ($$) {
     my $class;
-    ( $class, $apacheRequest ) = @_;
+    ( $class, $apacheRequest ) = splice @_;
     if ( time() - $lastReload > $reloadTime ) {
         unless ( my $tmp = $class->testConf(1) == OK ) {
             $class->lmLog( "$class: No configuration found", 'error' );
@@ -78,6 +78,7 @@ sub run ($$) {
             $user = decode_base64($user);
             ( $user, $pass ) = ( $user =~ /^(.*?):(.*)$/ );
             my $r = $soap->getCookies( $user, $pass );
+            my $cv;
 
             # Catch SOAP errors
             if ( $r->fault ) {
@@ -100,16 +101,16 @@ sub run ($$) {
                     );
                     return AUTH_REQUIRED;
                 }
-                $id = $res->{cookies}->{$cookieName};
+                $cv = $res->{cookies}->{$cookieName};
             }
 
             # Now, normal work to find session
             my %h;
-            eval { tie %h, $globalStorage, $id, $globalStorageOptions; };
+            eval { tie %h, $globalStorage, $cv, $globalStorageOptions; };
             if ($@) {
 
                 # The cookie isn't yet available
-                $class->lmLog( "The cookie $id isn't yet available: $@",
+                $class->lmLog( "The cookie $cv isn't yet available: $@",
                     'info' );
                 $class->updateStatus( $apacheRequest->connection->remote_ip,
                     $apacheRequest->uri, 'EXPIRED' );
@@ -152,6 +153,8 @@ sub run ($$) {
 __END__
 
 =head1 NAME
+
+=encoding utf8
 
 Lemonldap::NG::Handler::AuthBasic - Perl extension to be able to authenticate
 users by basic web system but to use Lemonldap::NG to control authorizations.

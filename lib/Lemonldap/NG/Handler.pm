@@ -5,7 +5,7 @@
 # Alias for Lemonldap::NG::Handler::SharedConf
 package Lemonldap::NG::Handler;
 
-our $VERSION = "0.92";
+our $VERSION = '0.99';
 use Lemonldap::NG::Handler::SharedConf;
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -14,6 +14,8 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 __END__
 
 =pod
+
+=encoding utf8
 
 =head1 NAME
 
@@ -108,7 +110,7 @@ but B<not with mod_perl 1.99>.
 
 =head3 B<Authentication>
 
-If a user isn't authenticated and attemps to connect to an area protected by a
+If a user isn't authenticated and attempts to connect to an area protected by a
 Lemonldap::NG compatible handler, he is redirected to a portal. The portal
 authenticates user with a ldap bind by default, but you can also use another
 authentication sheme like using x509 user certificates (see
@@ -196,7 +198,7 @@ on a protected area.
 
 =back
 
-It is also recommanded to use the C<groups> mechanism to avoid having to
+It is also recommended to use the C<groups> mechanism to avoid having to
 evaluate a long expression at each HTTP request:
 
   locationRules => {
@@ -218,7 +220,7 @@ C<groups> parameter. Perl expressions has to be enclosed with C<{}>:
 
 =back
 
-It is also recommanded to use Perl expressions to avoid requiering the LDAP
+It is also recommended to use Perl expressions to avoid requiering the LDAP
 server more than 2 times per authentication.
 
 =head3 B<Accounting>
@@ -247,7 +249,7 @@ virtual host:
 
 =over
 
-=item * B<keys> are the names of the choosen headers
+=item * B<keys> are the names of the chosen headers
 
 =item * B<values> are Perl expressions where you can use user datas stored in
 the global store by calling them C<$E<lt>varnameE<gt>>.

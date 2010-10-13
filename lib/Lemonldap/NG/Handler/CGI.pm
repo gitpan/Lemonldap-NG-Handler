@@ -17,7 +17,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 
 #link Lemonldap::NG::Handler::_CGI protected _handler
 
-our $VERSION = '0.4';
+our $VERSION = '0.99';
 
 ## @cmethod Lemonldap::NG::Handler::CGI new(hashRef args)
 # Constructor.
@@ -25,17 +25,23 @@ our $VERSION = '0.4';
 # @return new object
 sub new {
     my $class = shift;
-    my $self  = $class->SUPER::new() or $class->abort("Unable to build CGI");
+    my $self = $class->SUPER::new() or $class->abort("Unable to build CGI");
     $Lemonldap::NG::Handler::_CGI::_cgi = $self;
     unless ($Lemonldap::NG::Handler::_CGI::cookieName) {
         Lemonldap::NG::Handler::_CGI->init(@_);
         Lemonldap::NG::Handler::_CGI->initLocalStorage(@_);
     }
-    $class->abort("Unable to get configuration")
-      unless Lemonldap::NG::Handler::_CGI->testConf() == OK;
+    unless ( eval { Lemonldap::NG::Handler::_CGI->testConf() } == OK ) {
+        if ( $_[0]->{noAbort} ) {
+            $self->{noConf} = $@;
+        }
+        else {
+            $class->abort( "Unable to get configuration", $@ );
+        }
+    }
 
     # Arguments
-    my @args = @_;
+    my @args = splice @_;
     if ( ref( $args[0] ) ) {
         %$self = ( %$self, %{ $args[0] } );
     }
@@ -82,7 +88,11 @@ sub new {
 # If nothing is found, redirects the user to the Lemonldap::NG portal.
 # @return boolean : true if authentication is good. Exit before else
 sub authenticate {
-    my $self    = shift;
+    my $self = shift;
+    $self->abort(
+        "Can't authenticate because configuration has not been loaded",
+        $self->{noConf} )
+      if ( $self->{noConf} );
     my %cookies = fetch CGI::Cookie;
     my $id;
     unless ( $cookies{$cookieName} and $id = $cookies{$cookieName}->value ) {
@@ -126,7 +136,10 @@ sub authorize {
 # 0 if user isn't granted
 sub testUri {
     my $self = shift;
-    my $uri  = shift;
+    $self->abort( "Can't test URI because configuration has not been loaded",
+        $self->{noConf} )
+      if ( $self->{noConf} );
+    my $uri = shift;
     my $host =
       ( $uri =~ s#^(?:https?://)?([^/]*)/#/# ) ? $1 : $ENV{SERVER_NAME};
     return -1 unless ( Lemonldap::NG::Handler::_CGI->vhostAvailable($host) );
@@ -143,7 +156,7 @@ sub user {
 # @param $group name of the Lemonldap::NG group to test
 # @return boolean : true if user is in this group
 sub group {
-    my ( $self, $group ) = @_;
+    my ( $self, $group ) = splice @_;
     return ( $datas->{groups} =~ /\b$group\b/ );
 }
 
@@ -203,7 +216,7 @@ sub lmLog {
 # @param $vhost Virtual Host to test
 # @return boolean : true if $vhost is available
 sub vhostAvailable {
-    my ( $self, $vhost ) = @_;
+    my ( $self, $vhost ) = splice @_;
     return defined( $defaultCondition->{$vhost} );
 }
 
@@ -212,13 +225,13 @@ sub vhostAvailable {
 # @param $uri URI string
 # @param $vhost Optional virtual host (default current virtual host)
 sub grant {
-    my ( $self, $uri, $vhost ) = @_;
+    my ( $self, $uri, $vhost ) = splice @_;
     $vhost ||= $ENV{SERVER_NAME};
     $apacheRequest = Lemonldap::NG::Apache::Request->new(
         {
-        uri => $uri,
-        hostname => $vhost,
-        args => '',
+            uri      => $uri,
+            hostname => $vhost,
+            args     => '',
         }
     );
     for ( my $i = 0 ; $i < $locationCount->{$vhost} ; $i++ ) {
@@ -240,7 +253,7 @@ package Lemonldap::NG::Apache::Request;
 
 sub new {
     my $class = shift;
-    my $self = shift;
+    my $self  = shift;
     return bless $self, $class;
 }
 
@@ -261,6 +274,8 @@ __END__
 
 =head1 NAME
 
+=encoding utf8
+
 Lemonldap::NG::Handler::CGI - Perl extension for using Lemonldap::NG
 authentication in Perl CGI without using Lemonldap::NG::Handler
 
@@ -279,7 +294,7 @@ authentication in Perl CGI without using Lemonldap::NG::Handler
           dbiPassword          => "password",
       },
       https               => 0,
-      # Optionnal
+      # Optional
       protection    => 'rule: $uid eq "admin"',
       # Or to use rules from manager
       protection    => 'manager',
@@ -291,7 +306,7 @@ authentication in Perl CGI without using Lemonldap::NG::Handler
   # Lemonldap::NG cookie validation (done if you set "protection")
   $cgi->authenticate();
   
-  # Optionnal Lemonldap::NG authorization (done if you set "protection")
+  # Optional Lemonldap::NG authorization (done if you set "protection")
   $cgi->authorize();
   
   # See CGI(3) for more about writing HTML pages

@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 11;
+use Test::More tests => 10;
 BEGIN { use_ok( 'Lemonldap::NG::Handler::Simple', ':all' ) }
 
 #########################
@@ -38,7 +38,8 @@ ok(
 );
 
 ok( $h->defaultValuesInit(), 'defaultValuesInit' );
-ok( $h->portalInit( { portal => 'http://auth.example.com' } ) or 1, 'portalInit' );
+ok( $h->portalInit( { portal => 'http://auth.example.com' } )
+      or 1, 'portalInit' );
 ok(
     $h->globalStorageInit(
         {
@@ -52,6 +53,5 @@ ok( $h->forgeHeadersInit, 'forgeHeadersInit' );
 ok( $h->forgeHeadersInit( { exportedHeaders => { Auth => '$uid', } } ),
     'forgeHeadersInit 2' );
 
-ok( $h->grant('/s'),                   'grant OK' );
-ok( !$h->grant('/no'),                 'grant NOK' );
-ok( $h->cleanLocalStorage == DECLINED, 'cleanLocalStorage' );
+ok( $h->grant('/s'),   'grant OK' );
+ok( !$h->grant('/no'), 'grant NOK' );
