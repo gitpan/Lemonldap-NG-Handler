@@ -9,7 +9,7 @@ use Data::Dumper;
 
 #inherits Cache::Cache
 
-our $VERSION = '0.99.1';
+our $VERSION = '0.991';
 
 our $status   = {};
 our $activity = [];

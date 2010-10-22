@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Lemonldap-NG-Handler
-version:            0.99.1
+version:            0.991
 abstract:           The Apache protection module part of
 author:
     - Xavier Guimard <x.guimard@free.fr>

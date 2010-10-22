@@ -11,7 +11,7 @@ use strict;
 use MIME::Base64;
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
-our $VERSION = '0.99.1';
+our $VERSION = '0.991';
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables

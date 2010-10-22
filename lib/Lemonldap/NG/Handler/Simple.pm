@@ -27,7 +27,7 @@ use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '0.99.1';
+our $VERSION = '0.991';
 
 our %EXPORT_TAGS;
 
