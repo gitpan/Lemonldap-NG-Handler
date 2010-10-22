@@ -27,7 +27,7 @@ use base qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
 #parameter reloadTime Time in second between 2 configuration check (600)
 
-our $VERSION = '0.99';
+our $VERSION = '0.99.1';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -122,10 +122,8 @@ sub localInit {
 sub run($$) {
     my ( $class, $r ) = splice @_;
     if ( time() - $lastReload > $reloadTime ) {
-        unless ( my $tmp = $class->testConf(1) == OK ) {
-            $class->lmLog( "$class: No configuration found", 'error' );
-            return SERVER_ERROR;
-        }
+        die( "$class: No configuration found" )
+          unless ( $class->testConf(1) == OK );
     }
     return $class->SUPER::run($r);
 }

@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::MD5;
 
-our $VERSION = '0.99';
+our $VERSION = '0.99.1';
 
 # Shared variables
 our ( $sympaSecret, $sympaMailKey );
@@ -29,7 +29,7 @@ sub defaultValuesInit {
     # If not, try to read it from /etc/lemonldap-ng/sympa.secret
     if ( !$sympaSecret and -r '/etc/lemonldap-ng/sympa.secret' ) {
         open S, '/etc/lemonldap-ng/sympa.secret'
-          or die "Unable to open /etc/lemonldap-ng/sympa.secret";
+          or die("Unable to open /etc/lemonldap-ng/sympa.secret");
         $sympaSecret = join( '', <S> );
         close S;
         $sympaSecret =~ s/[\r\n]//g;
@@ -63,10 +63,8 @@ sub run {
     return $ret unless ( $ret == OK );
 
     # Fail if no sympaSecret
-    unless ($sympaSecret) {
-        $class->lmLog( "No Sympa secret configured", 'error' );
-        return SERVER_ERROR;
-    }
+    return $class->abort("No Sympa secret configured")
+      unless ($sympaSecret);
 
     # Mail value
     my $mail = $datas->{$sympaMailKey};

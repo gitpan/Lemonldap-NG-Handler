@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::HMAC_SHA1 qw(hmac_sha1 hmac_sha1_hex);
 
-our $VERSION = '0.99';
+our $VERSION = '0.99.1';
 
 # Shared variables
 our ( $zimbraPreAuthKey, $zimbraAccountKey, $zimbraBy, $zimbraUrl,
@@ -75,10 +75,8 @@ sub run {
     return OK unless ( $uri =~ $zimbraSsoUrl );
 
     # Check mandatory parameters
-    unless ($zimbraPreAuthKey) {
-        $class->lmLog( "No Zimbra preauth key configured", 'error' );
-        return SERVER_ERROR;
-    }
+    return $class->abort("No Zimbra preauth key configured");
+    unless ($zimbraPreAuthKey);
 
     # Build URL
     my $zimbra_url = $class->_buildZimbraPreAuthUrl(

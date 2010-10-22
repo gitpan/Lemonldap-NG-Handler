@@ -10,7 +10,7 @@ use strict;
 use Lemonldap::NG::Handler::Simple qw(:apache :headers :traces);
 use LWP::UserAgent;
 
-our $VERSION = '0.99';
+our $VERSION = '0.99.1';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #

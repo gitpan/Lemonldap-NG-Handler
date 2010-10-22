@@ -11,7 +11,7 @@ use strict;
 use MIME::Base64;
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
-our $VERSION = '0.99';
+our $VERSION = '0.99.1';
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables
@@ -28,7 +28,7 @@ sub defaultValuesInit {
 
         # Override with vhost options
         if ( defined $args->{vhostOptions} ) {
-        my $n = 'vhost' . ucfirst($t);
+            my $n = 'vhost' . ucfirst($t);
             foreach my $k ( keys %{ $args->{vhostOptions} } ) {
                 my $v = $args->{vhostOptions}->{$k}->{$n};
                 $class->lmLog( "Options $t for vhost $k: $v", 'debug' );

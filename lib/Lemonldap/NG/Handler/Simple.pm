@@ -27,7 +27,7 @@ use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '0.99';
+our $VERSION = '0.99.1';
 
 our %EXPORT_TAGS;
 
@@ -47,6 +47,7 @@ our (
     $customFunctions,    $transform,           $cda,
     $childInitDone,      $httpOnly,            $cookieExpiration,
     $timeoutActivity,    $datasUpdate,         $useRedirectOnForbidden,
+    $useRedirectOnError,
 );
 
 ##########################################
@@ -74,7 +75,8 @@ BEGIN {
         ],
         traces => [qw( $whatToTrace $statusPipe $statusOut)],
         apache => [
-            qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR useRedirectOnForbidden )
+            qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR
+	    $useRedirectOnForbidden $useRedirectOnError )
         ],
         post    => [qw($transform)],
         cda     => ['$cda'],
@@ -140,6 +142,7 @@ BEGIN {
             threads::shared::share($statusOut);
             threads::shared::share($timeoutActivity);
             threads::shared::share($useRedirectOnForbidden);
+            threads::shared::share($useRedirectOnError);
         };
     }
     elsif ( MP() == 1 ) {
@@ -187,13 +190,43 @@ sub logout_mp2 : method {
     shift->unlog(@_);
 }
 
+## @rmethod int abort(string mess)
+# Logs message and exit or redirect to the portal if "useRedirectOnError" is
+# set to true.
+# @param $mess Message to log
+# @return Apache2::Const::REDIRECT or Apache2::Const::SERVER_ERROR
+sub abort {
+    my ( $class, $mess ) = splice @_;
+
+    # If abort is called without a valid request, fall to die
+    eval {
+    my $args = $apacheRequest->args;
+    my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
+
+    # Set error 500 in logs even if "useRedirectOnError" is set
+    $apacheRequest->push_handlers(
+        PerlLogHandler => sub { $_[0]->status(SERVER_ERROR); DECLINED; } );
+    $class->lmLog( $mess, 'error' );
+
+    # Redirect or die
+    if ($useRedirectOnError) {
+        $class->lmLog( "Use redirect for error", 'debug' );
+        return $class->goToPortal( $uri, 'lmError=500' );
+    }
+    else {
+        return SERVER_ERROR;
+    }
+    };
+    die $mess if ($@);
+}
+
 ## @rmethod void lmLog(string mess, string level)
 # Wrapper for Apache log system
 # @param $mess message to log
 # @param $level string (debug, info, warning or error)
 sub lmLog {
     my ( $class, $mess, $level ) = splice @_;
-    die "Level is required" unless ($level);
+    die("Level is required") unless ($level);
     my $call;
     unless ( $level eq 'debug' ) {
         my @tmp = caller();
@@ -649,6 +682,10 @@ sub defaultValuesInit {
     $httpOnly         = defined($httpOnly) ? $httpOnly : $args->{httpOnly};
     $cookieExpiration = $args->{cookieExpiration} || $cookieExpiration;
     $timeoutActivity  = $args->{timeoutActivity} || $timeoutActivity || 0;
+    $useRedirectOnError =
+      defined($useRedirectOnError)
+      ? $useRedirectOnError
+      : $args->{useRedirectOnError};
     $useRedirectOnForbidden =
       defined($useRedirectOnForbidden)
       ? $useRedirectOnForbidden
@@ -678,7 +715,8 @@ sub portalInit {
 # @param $args reference to the configuration hash
 sub globalStorageInit {
     my ( $class, $args ) = splice @_;
-    $globalStorage = $args->{globalStorage} or die "globalStorage required";
+    $globalStorage = $args->{globalStorage}
+      or die("globalStorage required");
     eval "use $globalStorage;";
     die($@) if ($@);
     $globalStorageOptions = $args->{globalStorageOptions};
@@ -897,7 +935,11 @@ sub forbidden {
     }
     $class->updateStatus( $datas->{$whatToTrace}, $_[0], 'REJECT' );
     $apacheRequest->push_handlers(
-        PerlLogHandler => sub { $class->logForbidden( $uri, $datas ); DECLINED }
+        PerlLogHandler => sub {
+            $_[0]->status(FORBIDDEN);
+            $class->logForbidden( $uri, $datas );
+            DECLINED;
+        }
     );
 
     # Redirect or Forbidden?
@@ -966,16 +1008,16 @@ sub encodeUrl {
 # @return URL
 sub _buildUrl {
     my ( $class, $s ) = splice @_;
-        my $portString = $port || $apacheRequest->get_server_port();
-        $portString =
-            ( $https  && $portString == 443 ) ? ''
-          : ( !$https && $portString == 80 )  ? ''
-          :                                     ':' . $portString;
+    my $portString = $port || $apacheRequest->get_server_port();
+    $portString =
+        ( $https  && $portString == 443 ) ? ''
+      : ( !$https && $portString == 80 )  ? ''
+      :                                     ':' . $portString;
     return
         "http"
-          . ( $https ? "s" : "" ) . "://"
-          . $apacheRequest->get_server_name()
-          . $portString
+      . ( $https ? "s" : "" ) . "://"
+      . $apacheRequest->get_server_name()
+      . $portString
       . $s;
 }
 
@@ -1047,16 +1089,17 @@ sub run ($$) {
         my $str = $1;
         $class->lmLog( 'CDA request', 'debug' );
         $apacheRequest->args($args);
-        my $host = $apacheRequest->get_server_name();
+        my $host          = $apacheRequest->get_server_name();
+        my $redirectUrl   = $class->_buildUrl( $apacheRequest->uri );
+        my $redirectHttps = ( $redirectUrl =~ m/^ĥttps/ );
         lmSetErrHeaderOut( $apacheRequest,
-            $class->_buildUrl( $apacheRequest->uri )
-              . ( $args ? "?" . $args : "" ) );
+            'Location' => $redirectUrl . ( $args ? "?" . $args : "" ) );
         $host =~ s/^[^\.]+\.(.*\..*$)/$1/;
         lmSetErrHeaderOut(
             $apacheRequest,
             'Set-Cookie' => "$str; domain=$host; path=/"
-              . ( $https    ? "; secure"   : "" )
-              . ( $httpOnly ? "; HttpOnly" : "" )
+              . ( $redirectHttps ? "; secure"   : "" )
+              . ( $httpOnly      ? "; HttpOnly" : "" )
               . (
                 $cookieExpiration
                 ? "; expires=" . expires( $cookieExpiration, 'cookie' )
@@ -1252,10 +1295,8 @@ sub redirectFilter {
 sub status($$) {
     my ( $class, $r ) = splice @_;
     $class->lmLog( "$class: request for status", 'debug' );
-    unless ( $statusPipe and $statusOut ) {
-        $class->lmLog( "$class: status page can not be displayed", 'error' );
-        return SERVER_ERROR;
-    }
+    return $class->abort("$class: status page can not be displayed")
+    	unless ( $statusPipe and $statusOut );
     $r->handler("perl-script");
     print $statusPipe "STATUS" . ( $r->args ? " " . $r->args : '' ) . "\n";
     my $buf;

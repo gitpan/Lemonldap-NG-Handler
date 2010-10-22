@@ -16,7 +16,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 use utf8;
 no utf8;
 
-our $VERSION = '0.99';
+our $VERSION = '0.99.1';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -82,12 +82,8 @@ sub run ($$) {
 
             # Catch SOAP errors
             if ( $r->fault ) {
-                $class->lmLog(
-                    "SOAP request to the portal failed: "
-                      . $r->fault->{faultstring},
-                    'error'
-                );
-                return SERVER_ERROR;
+                return $class->abort( "SOAP request to the portal failed: "
+                      . $r->fault->{faultstring} );
             }
             else {
                 my $res = $r->result();
