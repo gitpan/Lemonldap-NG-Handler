@@ -16,7 +16,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 use utf8;
 no utf8;
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -212,7 +212,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2008 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+Copyright (C) 2008, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,

@@ -9,7 +9,7 @@ use Data::Dumper;
 
 #inherits Cache::Cache
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 our $status   = {};
 our $activity = [];
@@ -450,7 +450,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2008 by Xavier Guimard
+Copyright (C) 2008, 2010 by Xavier Guimard
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.8 or,

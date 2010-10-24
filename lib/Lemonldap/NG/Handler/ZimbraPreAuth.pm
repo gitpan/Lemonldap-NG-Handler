@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::HMAC_SHA1 qw(hmac_sha1 hmac_sha1_hex);
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 # Shared variables
 our ( $zimbraPreAuthKey, $zimbraAccountKey, $zimbraBy, $zimbraUrl,
@@ -186,7 +186,7 @@ Clement Oudot, E<lt>clement@oodo.netE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 201O by Clement Oudot
+Copyright (C) 2010 by Clement Oudot
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.10.0 or,

@@ -27,7 +27,7 @@ use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 our %EXPORT_TAGS;
 
@@ -1530,7 +1530,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2007 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+Copyright (C) 2005, 2007, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,

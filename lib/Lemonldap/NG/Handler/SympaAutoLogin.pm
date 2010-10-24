@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::MD5;
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 # Shared variables
 our ( $sympaSecret, $sympaMailKey );
@@ -148,7 +148,7 @@ Clement Oudot,  E<lt>clement@oodo.netE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2009 by Xavier Guimard
+Copyright (C) 2009, 2010 by Xavier Guimard
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.10.0 or,

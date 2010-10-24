@@ -11,7 +11,7 @@ use strict;
 use MIME::Base64;
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables
@@ -366,7 +366,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+Copyright (C) 2005, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
