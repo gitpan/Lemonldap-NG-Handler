@@ -16,7 +16,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 use utf8;
 no utf8;
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -194,7 +194,7 @@ with a normal Lemonldap::NG installation but to manage non-browser clients.
 =head1 SEE ALSO
 
 L<Lemonldap::NG::Handler(3)>,
-http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
+L<http://lemonldap-ng.org/>
 
 =head1 AUTHOR
 
@@ -203,7 +203,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 =head1 BUG REPORT
 
 Use OW2 system to report bug or ask for features:
-L<http://forge.objectweb.org/tracker/?group_id=274>
+L<http://jira.ow2.org>
 
 =head1 DOWNLOAD
 
@@ -215,7 +215,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 Copyright (C) 2008, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.4 or,
+it under the same terms as Perl itself, either Perl version 5.10.0 or,
 at your option, any later version of Perl 5 you may have available.
 
 =cut

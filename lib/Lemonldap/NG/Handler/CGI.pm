@@ -17,7 +17,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 
 #link Lemonldap::NG::Handler::_CGI protected _handler
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 ## @cmethod Lemonldap::NG::Handler::CGI new(hashRef args)
 # Constructor.
@@ -336,7 +336,7 @@ area because it hides Lemonldap::NG cookies.
 
 =head1 SEE ALSO
 
-L<http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation>,
+L<http://lemonldap-ng.org/>
 L<CGI>, L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Manager>,
 L<Lemonldap::NG::Portal>
 
@@ -347,7 +347,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 =head1 BUG REPORT
 
 Use OW2 system to report bug or ask for features:
-L<http://forge.objectweb.org/tracker/?group_id=274>
+L<http://jira.ow2.org>
 
 =head1 DOWNLOAD
 
@@ -359,7 +359,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 Copyright (C) 2007, 2010 by Xavier Guimard
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.8 or,
+it under the same terms as Perl itself, either Perl version 5.10.0 or,
 at your option, any later version of Perl 5 you may have available.
 
 =cut

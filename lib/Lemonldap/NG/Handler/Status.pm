@@ -9,7 +9,7 @@ use Data::Dumper;
 
 #inherits Cache::Cache
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 our $status   = {};
 our $activity = [];
@@ -22,9 +22,11 @@ our $page_title = 'Lemonldap::NG statistics';
 # @return Constant hash used to convert error codes into string.
 sub portalTab {
     return {
-        -3 => 'PE_INFO',
+        -5 => 'PORTAL_IMG_NOK',
+        -4 => 'PORTAL_IMG_OK',
+        -3 => 'PORTAL_INFO',
         -2 => 'PORTAL_REDIRECT',
-        -1 => 'PORTAL_ALREADY_AUTHENTICATED',
+        -1 => 'PORTAL_DONE',
         0  => 'PORTAL_OK',
         1  => 'PORTAL_SESSIONEXPIRED',
         2  => 'PORTAL_FORMEMPTY',
@@ -63,6 +65,24 @@ sub portalTab {
         45 => 'PORTAL_MAILERROR',
         46 => 'PORTAL_MAILOK',
         47 => 'PORTAL_LOGOUT_OK',
+        48 => 'PORTAL_SAML_ERROR',
+        49 => 'PORTAL_SAML_LOAD_SERVICE_ERROR',
+        50 => 'PORTAL_SAML_LOAD_IDP_ERROR',
+        51 => 'PORTAL_SAML_SSO_ERROR',
+        52 => 'PORTAL_SAML_UNKNOWN_ENTITY',
+        53 => 'PORTAL_SAML_DESTINATION_ERROR',
+        54 => 'PORTAL_SAML_CONDITIONS_ERROR',
+        55 => 'PORTAL_SAML_IDPSSOINITIATED_NOTALLOWED',
+        56 => 'PORTAL_SAML_SLO_ERROR',
+        57 => 'PORTAL_SAML_SIGNATURE_ERROR',
+        58 => 'PORTAL_SAML_ART_ERROR',
+        59 => 'PORTAL_SAML_SESSION_ERROR',
+        60 => 'PORTAL_SAML_LOAD_SP_ERROR',
+        61 => 'PORTAL_SAML_ATTR_ERROR',
+        62 => 'PORTAL_OPENID_EMPTY',
+        63 => 'PORTAL_OPENID_BADID',
+        64 => 'PORTAL_MISSINGREQATTR',
+        65 => 'PORTAL_BADPARTNER',
     };
 }
 
@@ -253,7 +273,7 @@ sub timeUp {
     $d = ( $d - $mn ) / 60;
     my $h = $d % 24;
     $d = ( $d - $h ) / 24;
-    return "$d\d $h\h $mn\mn";
+    return "${d}d ${h}h ${mn}mn";
 }
 
 ## @rfn private void topByCat(string cat,int max)
@@ -442,7 +462,7 @@ L<mrtg> or directly browsed by your browser.
 =head1 SEE ALSO
 
 L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Portal>, L<Lemonldap::NG::Manager>,
-L<http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation>
+L<http://lemonldap-ng.org/>
 
 =head1 AUTHOR
 
@@ -453,7 +473,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 Copyright (C) 2008, 2010 by Xavier Guimard
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.8 or,
+it under the same terms as Perl itself, either Perl version 5.10.0 or,
 at your option, any later version of Perl 5 you may have available.
 
 =cut

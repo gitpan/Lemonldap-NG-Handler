@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::HMAC_SHA1 qw(hmac_sha1 hmac_sha1_hex);
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 # Shared variables
 our ( $zimbraPreAuthKey, $zimbraAccountKey, $zimbraBy, $zimbraUrl,
@@ -177,7 +177,7 @@ See L<Lemonldap::NG::Handler>
 
 =head1 SEE ALSO
 
-http://wiki.zimbra.com/wiki/Preauth
+L<http://wiki.zimbra.com/wiki/Preauth>
 L<Lemonldap::NG::Handler>
 
 =head1 AUTHOR

@@ -9,7 +9,7 @@ use strict;
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 ## @rmethod int run(Apache2::RequestRec apacheRequest)
 # Main method used to control access.

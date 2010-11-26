@@ -5,13 +5,15 @@
 # This class adds virtual host support for Lemonldap::NG handlers.
 package Lemonldap::NG::Handler::Vhost;
 
+use strict;
+use AutoLoader 'AUTOLOAD';
+
 use Lemonldap::NG::Handler::Simple qw(:locationRules :headers :post :apache)
   ;    #inherits
-use strict;
 use MIME::Base64;
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables
@@ -100,15 +102,13 @@ sub forgeHeadersInit {
 
         my $sub;
         foreach ( keys %tmp ) {
-            $sub .=
-              "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
-              . $tmp{$_} . ")));";
+            $sub .= "'$_' => join('',split(/[\\r\\n]+/,$tmp{$_})),";
         }
 
         $forgeHeaders->{$vhost} = (
             SAFEWRAP
             ? $class->safe->wrap_code_ref( $class->safe->reval("sub {$sub}") )
-            : $class->safe->reval("sub {$sub}")
+            : $class->safe->reval("sub {return($sub)}")
         );
         $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}",
             'error' )
@@ -124,10 +124,7 @@ sub sendHeaders {
     my $vhost;
     $vhost = $apacheRequest->hostname;
     if ( defined( $forgeHeaders->{$vhost} ) ) {
-        &{ $forgeHeaders->{$vhost} };
-    }
-    else {
-        lmSetHeaderIn( $apacheRequest, 'Auth-User' => $datas->{uid} );
+        lmSetHeaderIn( $apacheRequest, &{ $forgeHeaders->{$vhost} } );
     }
 }
 
@@ -165,6 +162,110 @@ sub grant {
     return &{ $defaultCondition->{$vhost} }($datas);
 }
 
+## @cmethod private string _buildUrl(string s)
+# Transform /<s> into http(s?)://<host>:<port>/s
+# @param $s path
+# @return URL
+sub _buildUrl {
+    my ( $class, $s ) = splice @_;
+    my $vhost = $apacheRequest->hostname;
+    my $portString =
+         $port->{$vhost}
+      || $port->{_}
+      || $apacheRequest->get_server_port();
+    my $_https =
+      ( defined( $https->{$vhost} ) ? $https->{$vhost} : $https->{_} );
+    $portString =
+        ( $_https  && $portString == 443 ) ? ''
+      : ( !$_https && $portString == 80 )  ? ''
+      :                                      ':' . $portString;
+    my $url = "http"
+      . ( $_https ? "s" : "" ) . "://"
+      . $apacheRequest->get_server_name()
+      . $portString
+      . $s;
+    $class->lmLog( "Build URL $url", 'debug' );
+    return $url;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+=encoding utf8
+
+Lemonldap::NG::Handler::Vhost - Perl extension for building a Lemonldap::NG
+compatible handler able to manage Apache virtual hosts.
+
+=head1 SYNOPSIS
+
+Create your own package:
+
+  package My::Package;
+  use Lemonldap::NG::Handler::Vhost;
+  
+  # IMPORTANT ORDER
+  our @ISA = qw (Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
+  
+  __PACKAGE__->init ( { locationRules => {
+             'vhost1.dc.com' => {
+                 'default' => '$ou =~ /brh/'
+             },
+             'vhost2.dc.com' => {
+                 '^/pj/.*$'       => '$qualif="opj"',
+                 '^/rh/.*$'       => '$ou=~/brh/',
+                 '^/rh_or_opj.*$' => '$qualif="opj" or $ou=~/brh/',
+                 default          => 'accept',
+             },
+             # Put here others Lemonldap::NG::Handler::Simple options
+           }
+         );
+
+Call your package in <apache-directory>/conf/httpd.conf
+
+  PerlRequire MyFile
+  PerlHeaderParserHandler My::Package
+
+=head1 DESCRIPTION
+
+This library provides a way to protect Apache virtual hosts with Lemonldap::NG.
+
+=head2 INITIALISATION PARAMETERS
+
+Lemonldap::NG::Handler::Vhost splits the locationRules parameter into a hash
+reference which contains anonymous hash references as used by
+L<Lemonldap::NG::Handler::Simple>.
+
+=head1 SEE ALSO
+
+L<Lemonldap::NG::Handler(3)>,
+L<http://lemonldap-ng.org/>
+
+=head1 AUTHOR
+
+Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=head1 BUG REPORT
+
+Use OW2 system to report bug or ask for features:
+L<http://jira.ow2.org>
+
+=head1 DOWNLOAD
+
+Lemonldap::NG is available at
+L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2005, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.10.0 or,
+at your option, any later version of Perl 5 you may have available.
+
+=cut
 ## @imethod protected void postUrlInit()
 # Prepare methods to post form attributes
 sub postUrlInit {
@@ -269,107 +370,3 @@ sub transformUri {
     OK;
 }
 
-## @cmethod private string _buildUrl(string s)
-# Transform /<s> into http(s?)://<host>:<port>/s
-# @param $s path
-# @return URL
-sub _buildUrl {
-    my ( $class, $s ) = splice @_;
-    my $vhost = $apacheRequest->hostname;
-    my $portString =
-         $port->{$vhost}
-      || $port->{_}
-      || $apacheRequest->get_server_port();
-    my $_https =
-      ( defined( $https->{$vhost} ) ? $https->{$vhost} : $https->{_} );
-    $portString =
-        ( $_https  && $portString == 443 ) ? ''
-      : ( !$_https && $portString == 80 )  ? ''
-      :                                      ':' . $portString;
-    my $url = "http"
-      . ( $_https ? "s" : "" ) . "://"
-      . $apacheRequest->get_server_name()
-      . $portString
-      . $s;
-    $class->lmLog( "Build URL $url", 'debug' );
-    return $url;
-}
-
-1;
-
-__END__
-
-=head1 NAME
-
-=encoding utf8
-
-Lemonldap::NG::Handler::Vhost - Perl extension for building a Lemonldap::NG
-compatible handler able to manage Apache virtual hosts.
-
-=head1 SYNOPSIS
-
-Create your own package:
-
-  package My::Package;
-  use Lemonldap::NG::Handler::Vhost;
-  
-  # IMPORTANT ORDER
-  our @ISA = qw (Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
-  
-  __PACKAGE__->init ( { locationRules => {
-             'vhost1.dc.com' => {
-                 'default' => '$ou =~ /brh/'
-             },
-             'vhost2.dc.com' => {
-                 '^/pj/.*$'       => '$qualif="opj"',
-                 '^/rh/.*$'       => '$ou=~/brh/',
-                 '^/rh_or_opj.*$' => '$qualif="opj" or $ou=~/brh/',
-                 default          => 'accept',
-             },
-             # Put here others Lemonldap::NG::Handler::Simple options
-           }
-         );
-
-Call your package in <apache-directory>/conf/httpd.conf
-
-  PerlRequire MyFile
-  PerlHeaderParserHandler My::Package
-
-=head1 DESCRIPTION
-
-This library provides a way to protect Apache virtual hosts with Lemonldap::NG.
-
-=head2 INITIALISATION PARAMETERS
-
-Lemonldap::NG::Handler::Vhost splits the locationRules parameter into a hash
-reference which contains anonymous hash references as used by
-L<Lemonldap::NG::Handler::Simple>.
-
-=head1 SEE ALSO
-
-L<Lemonldap::NG::Handler(3)>,
-http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
-
-=head1 AUTHOR
-
-Xavier Guimard, E<lt>x.guimard@free.frE<gt>
-
-=head1 BUG REPORT
-
-Use OW2 system to report bug or ask for features:
-L<http://forge.objectweb.org/tracker/?group_id=274>
-
-=head1 DOWNLOAD
-
-Lemonldap::NG is available at
-L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
-
-=head1 COPYRIGHT AND LICENSE
-
-Copyright (C) 2005, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
-
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.4 or,
-at your option, any later version of Perl 5 you may have available.
-
-=cut

@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::MD5;
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 # Shared variables
 our ( $sympaSecret, $sympaMailKey );

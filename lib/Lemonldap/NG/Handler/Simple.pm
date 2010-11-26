@@ -17,6 +17,7 @@ use strict;
 
 use MIME::Base64;
 use Exporter 'import';
+use AutoLoader 'AUTOLOAD';
 use Safe;
 use Lemonldap::NG::Common::Safelib;    #link protected safe Safe object
 require POSIX;
@@ -27,7 +28,7 @@ use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '0.992';
+our $VERSION = '1.0.0';
 
 our %EXPORT_TAGS;
 
@@ -76,7 +77,7 @@ BEGIN {
         traces => [qw( $whatToTrace $statusPipe $statusOut)],
         apache => [
             qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR
-	    $useRedirectOnForbidden $useRedirectOnError )
+              $useRedirectOnForbidden $useRedirectOnError )
         ],
         post    => [qw($transform)],
         cda     => ['$cda'],
@@ -110,6 +111,8 @@ BEGIN {
         Apache2::RequestIO->import();
         require APR::Table;
         APR::Table->import();
+        require Apache2::URI;
+        Apache2::URI->import();
         require Apache2::Const;
         Apache2::Const->import( '-compile', qw(:common :log) );
         eval '
@@ -166,11 +169,6 @@ BEGIN {
     *logout  = ( MP() == 2 ) ? \&logout_mp2  : \&logout_mp1;
 }
 
-## @rmethod protected int handler_mp1()
-# Launch run() when used under mod_perl version 1
-# @return Apache constant
-sub handler_mp1 ($$) { shift->run(@_); }
-
 ## @rmethod protected int handler_mp2()
 # Launch run() when used under mod_perl version 2
 # @return Apache constant
@@ -178,46 +176,11 @@ sub handler_mp2 : method {
     shift->run(@_);
 }
 
-## @rmethod protected int logout_mp1()
-# Launch unlog() when used under mod_perl version 1
-# @return Apache constant
-sub logout_mp1 ($$) { shift->unlog(@_); }
-
 ## @rmethod protected int logout_mp2()
 # Launch unlog() when used under mod_perl version 2
 # @return Apache constant
 sub logout_mp2 : method {
     shift->unlog(@_);
-}
-
-## @rmethod int abort(string mess)
-# Logs message and exit or redirect to the portal if "useRedirectOnError" is
-# set to true.
-# @param $mess Message to log
-# @return Apache2::Const::REDIRECT or Apache2::Const::SERVER_ERROR
-sub abort {
-    my ( $class, $mess ) = splice @_;
-
-    # If abort is called without a valid request, fall to die
-    eval {
-    my $args = $apacheRequest->args;
-    my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
-
-    # Set error 500 in logs even if "useRedirectOnError" is set
-    $apacheRequest->push_handlers(
-        PerlLogHandler => sub { $_[0]->status(SERVER_ERROR); DECLINED; } );
-    $class->lmLog( $mess, 'error' );
-
-    # Redirect or die
-    if ($useRedirectOnError) {
-        $class->lmLog( "Use redirect for error", 'debug' );
-        return $class->goToPortal( $uri, 'lmError=500' );
-    }
-    else {
-        return SERVER_ERROR;
-    }
-    };
-    die $mess if ($@);
 }
 
 ## @rmethod void lmLog(string mess, string level)
@@ -281,12 +244,14 @@ sub regRemoteIp {
 # @param $h Name of the header
 # @param $v Value of the header
 sub lmSetHeaderIn {
-    my ( $r, $h, $v ) = splice @_;
+    my ( $r, %hdr ) = splice @_;
+    while ( my ( $h, $v ) = each %hdr ) {
     if ( MP() == 2 ) {
-        return $r->headers_in->set( $h => $v );
+            $r->headers_in->set( $h => $v );
     }
     elsif ( MP() == 1 ) {
-        return $r->header_in( $h => $v );
+            $r->header_in( $h => $v );
+        }
     }
 }
 
@@ -350,38 +315,6 @@ sub lmHeaderOut {
     }
 }
 
-# Status daemon creation
-
-## @ifn protected void statusProcess()
-# Launch the status processus.
-sub statusProcess {
-    require IO::Pipe;
-    $statusPipe = IO::Pipe->new;
-    $statusOut  = IO::Pipe->new;
-    if ( my $pid = fork() ) {
-        $statusPipe->writer();
-        $statusOut->reader();
-        $statusPipe->autoflush(1);
-    }
-    else {
-        require Data::Dumper;
-        $statusPipe->reader();
-        $statusOut->writer();
-        my $fdin  = $statusPipe->fileno;
-        my $fdout = $statusOut->fileno;
-        open STDIN,  "<&$fdin";
-        open STDOUT, ">&$fdout";
-        my @tmp = ();
-        push @tmp, "-I$_" foreach (@INC);
-        exec 'perl', '-MLemonldap::NG::Handler::Status',
-          @tmp,
-          '-e',
-          '&Lemonldap::NG::Handler::Status::run('
-          . $localStorage . ','
-          . Data::Dumper->new( [$localStorageOptions] )->Terse(1)->Dump . ');';
-    }
-}
-
 ##############################
 # Initialization subroutines #
 ##############################
@@ -413,22 +346,12 @@ sub safe {
             }";
         $class->lmLog( $@, 'error' ) if ($@);
     }
-    $safe->share_from( 'main', [ '%ENV', 'APR::Table::set' ] );
+    $safe->share_from( 'main', [ '%ENV' ] );
     $safe->share_from( 'Lemonldap::NG::Common::Safelib',
         $Lemonldap::NG::Common::Safelib::functions );
-    $safe->share( '&encode_base64', '$datas', '&lmSetHeaderIn',
-        '$apacheRequest', '&portal', @t );
+    $safe->share( '&encode_base64', '$datas', '&portal', @t );
 
     return $safe;
-}
-
-## @imethod void init(hashRef args)
-# Calls localInit() and globalInit().
-# @param $args reference to the initialization hash
-sub init($$) {
-    my $class = shift;
-    $class->localInit(@_);
-    $class->globalInit(@_);
 }
 
 ## @imethod void localInit(hashRef args)
@@ -531,43 +454,6 @@ sub globalInit {
     $class->globalStorageInit(@_);
     $class->forgeHeadersInit(@_);
     $class->postUrlInit(@_);
-}
-
-## @imethod protected void locationRulesInit(hashRef args)
-# Compile rules.
-# Rules are stored in $args->{locationRules} that contains regexp=>test
-# expressions where :
-# - regexp is used to test URIs
-# - test contains an expression used to grant the user
-#
-# This function creates 2 arrays containing :
-# - the list of the compiled regular expressions
-# - the list of the compiled functions (compiled with conditionSub())
-# @param $args reference to the configuration hash
-sub locationRulesInit {
-    my ( $class, $args ) = splice @_;
-    $locationCount = 0;
-
-    # Pre compilation : both regexp and conditions
-    foreach ( sort keys %{ $args->{locationRules} } ) {
-        if ( $_ eq 'default' ) {
-            ( $defaultCondition, $defaultProtection ) =
-              $class->conditionSub( $args->{locationRules}->{$_} );
-        }
-        else {
-            (
-                $locationCondition->[$locationCount],
-                $locationProtection->[$locationCount]
-            ) = $class->conditionSub( $args->{locationRules}->{$_} );
-            $locationRegexp->[$locationCount] = qr/$_/;
-            $locationCount++;
-        }
-    }
-
-    # Default police: all authenticated users are accepted
-    ( $defaultCondition, $defaultProtection ) = $class->conditionSub('accept')
-      unless ($defaultCondition);
-    1;
 }
 
 ## @imethod protected codeRef conditionSub(string cond)
@@ -722,42 +608,6 @@ sub globalStorageInit {
     $globalStorageOptions = $args->{globalStorageOptions};
 }
 
-## @imethod protected void forgeHeadersInit(hashRef args)
-# Create the &$forgeHeaders subroutine used to insert
-# headers into the HTTP request.
-# @param $args reference to the configuration hash
-sub forgeHeadersInit {
-    my ( $class, $args ) = splice @_;
-
-    # Creation of the subroutine who will generate headers
-    my %tmp;
-    if ( $args->{exportedHeaders} ) {
-        %tmp = %{ $args->{exportedHeaders} };
-    }
-    else {
-        %tmp = ( 'User-Auth' => '$uid' );
-    }
-    foreach ( keys %tmp ) {
-        $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-        $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
-    }
-
-    my $sub;
-    foreach ( keys %tmp ) {
-        $sub .=
-          "lmSetHeaderIn(\$apacheRequest,'$_' => join('',split(/[\\r\\n]+/,"
-          . $tmp{$_} . ")));";
-    }
-    $forgeHeaders = (
-        SAFEWRAP
-        ? $class->safe->wrap_code_ref( $class->safe->reval("sub{$sub}") )
-        : $class->safe->reval("sub{$sub}")
-    );
-    $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' )
-      if ($@);
-    1;
-}
-
 ## @imethod protected int initLocalStorage()
 # Prepare local cache (if not done before by Lemonldap::NG::Common::Conf)
 # @return Apache2::Const::DECLINED
@@ -770,114 +620,6 @@ sub initLocalStorage {
           unless ( defined $refLocalStorage );
     }
     return DECLINED;
-}
-
-## @imethod protected void postUrlInit()
-# Prepare methods to post form attributes
-sub postUrlInit {
-    my ( $class, $args ) = splice @_;
-
-    # Do nothing if no POST configured
-    return unless ( $args->{post} );
-
-    # Load required modules
-    eval 'use Apache2::Filter;use URI';
-
-    # Prepare transform sub
-    $transform = {};
-
-    #  Browse all POST URI
-    while ( my ( $url, $d ) = each( %{ $args->{post} } ) ) {
-
-        # Where to POST
-        $d->{postUrl} ||= $url;
-
-        # Register POST form for POST URL
-        $transform->{ $d->{postUrl} } =
-          sub { $class->buildPostForm( $d->{postUrl} ) }
-          if ( $url ne $d->{postUrl} );
-
-        # Get datas to POST
-        my $expr = $d->{expr};
-        my %postdata;
-
-        # Manage old and new configuration format
-        # OLD: expr => 'param1 => value1, param2 => value2',
-        # NEW : expr => { param1 => value1, param2 => value2 },
-        if ( ref $expr eq 'HASH' ) {
-            %postdata = %$expr;
-        }
-        else {
-            %postdata = split /(?:\s*=>\s*|\s*,\s*)/, $expr;
-        }
-
-        # Build string for URI::query_form
-        my $tmp;
-        foreach ( keys %postdata ) {
-            $postdata{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-            $postdata{$_} = "'$postdata{$_}'" if ( $postdata{$_} =~ /^\w+$/ );
-            $tmp .= "'$_'=>$postdata{$_},";
-        }
-
-        # Build subroutine
-        my $sub = "sub{
-            my \$f = shift;
-            my \$l;
-            unless(\$f->ctx){
-            \$f->ctx(1);
-            my \$u=URI->new('http:');
-            \$u->query_form({$tmp});
-            my \$s=\$u->query();
-            \$l = \$f->r->headers_in->{'Content-Length'};
-            \$f->r->headers_in->set( 'Content-Length' => length(\$s) );
-            \$f->r->headers_in->set( 'Content-Type' => 'application/x-www-form-urlencoded' );
-            \$f->print(\$s);
-            while ( \$f->read( my \$b, \$l ) ) {}
-            \$f->seen_eos(1);
-            }
-            return OK;
-        }"
-          ;
-        $sub = (
-            SAFEWRAP
-            ? $class->safe->wrap_code_ref( $class->safe->reval($sub) )
-            : $class->safe->reval($sub)
-        );
-        $class->lmLog( "Compiling POST request for $url", 'debug' );
-        $transform->{$url} = sub {
-            return $class->buildPostForm($url)
-              if ( $apacheRequest->method ne 'POST' );
-            $apacheRequest->add_input_filter($sub);
-            OK;
-          }
-    }
-}
-
-## @imethod protected buildPostForm(string url, int count)
-# Build form that will be posted by client
-# Fill an input hidden with fake value to
-# reach the size of initial request
-# @param url Target of POST
-# @param count Fake input size
-# @return Apache2::Const::OK
-sub buildPostForm {
-    my $class = shift;
-    my $url   = shift;
-    my $count = shift || 1000;
-    $apacheRequest->handler("perl-script");
-    $apacheRequest->set_handlers(
-        'PerlResponseHandler' => sub {
-            my $r = shift;
-            $r->content_type('text/html; charset=UTF-8');
-            $r->print(
-qq{<html><body onload="document.getElementById('f').submit()"><form id="f" method="post" action="$url"><input type=hidden name="a" value="}
-                  . sprintf( "%0" . $count . "d", 1 )
-                  . qq{"/><input type="submit" value="Ok"/></form></body></html>}
-            );
-            OK;
-        }
-    );
-    OK;
 }
 
 ###################
@@ -894,30 +636,6 @@ sub updateStatus {
           . "$url $action\n"
           if ($statusPipe);
     };
-}
-
-## @rmethod protected boolean isProtected()
-# @return True if URI isn't protected (rule "unprotect")
-sub isProtected {
-    my ( $class, $uri ) = splice @_;
-    for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
-        return $locationProtection->[$i]
-          if ( $uri =~ $locationRegexp->[$i] );
-    }
-    return $defaultProtection;
-}
-
-## @rmethod protected boolean grant(string uri)
-# Grant or refuse client using compiled regexp and functions
-# @param uri URI requested
-# @return True if the user is granted to access to the current URL
-sub grant {
-    my ( $class, $uri ) = splice @_;
-    for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
-        return &{ $locationCondition->[$i] }($datas)
-          if ( $uri =~ $locationRegexp->[$i] );
-    }
-    return &$defaultCondition($datas);
 }
 
 ## @rmethod protected int forbidden(string uri)
@@ -996,29 +714,11 @@ sub hideCookie {
 
 ## @rmethod protected string encodeUrl(string url)
 # Encode URl in the format used by Lemonldap::NG::Portal for redirections.
+# @return Base64 encoded string
 sub encodeUrl {
     my ( $class, $url ) = splice @_;
     $url = $class->_buildUrl($url) if ( $url !~ m#^https?://# );
     return encode_base64( $url, '' );
-}
-
-## @method private string _buildUrl(string s)
-# Transform /<s> into http(s?)://<host>:<port>/s
-# @param $s path
-# @return URL
-sub _buildUrl {
-    my ( $class, $s ) = splice @_;
-    my $portString = $port || $apacheRequest->get_server_port();
-    $portString =
-        ( $https  && $portString == 443 ) ? ''
-      : ( !$https && $portString == 80 )  ? ''
-      :                                     ':' . $portString;
-    return
-        "http"
-      . ( $https ? "s" : "" ) . "://"
-      . $apacheRequest->get_server_name()
-      . $portString
-      . $s;
 }
 
 ## @rmethod protected int goToPortal(string url, string arg)
@@ -1048,20 +748,6 @@ sub goToPortal {
 sub fetchId {
     my $t = lmHeaderIn( $apacheRequest, 'Cookie' );
     return ( $t =~ /$cookieName=([^,; ]+)/o ) ? $1 : 0;
-}
-
-## @rmethod protected transformUri(string uri)
-# Transform URI to replay POST forms
-# @param uri URI to catch
-# @return Apache2::Const
-sub transformUri {
-    my ( $class, $uri ) = splice @_;
-
-    if ( defined( $transform->{$uri} ) ) {
-        return &{ $transform->{$uri} };
-    }
-
-    OK;
 }
 
 # MAIN SUBROUTINE called by Apache (using PerlHeaderParserHandler option)
@@ -1109,6 +795,7 @@ sub run ($$) {
         return REDIRECT;
     }
     my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
+    Apache2::URI::unescape_url($uri);
 
     # AUTHENTICATION
     # I - recover the cookie
@@ -1205,127 +892,6 @@ sub run ($$) {
 
     # Return OK
     OK;
-}
-
-## @rmethod protected void sendHeaders()
-# Launch function compiled by forgeHeadersInit()
-sub sendHeaders {
-    &$forgeHeaders;
-}
-
-## @rmethod int unprotect()
-# Used to unprotect an area.
-# To use it, set "PerlHeaderParserHandler My::Package->unprotect" Apache
-# configuration file.
-# It replace run() by doing nothing.
-# @return Apache2::Const::OK
-sub unprotect {
-    OK;
-}
-
-## @rmethod protected void localUnlog()
-# Delete current user from local cache entry.
-sub localUnlog {
-    my $class = shift;
-    if ( my $id = $class->fetchId ) {
-
-        # Delete Apache thread datas
-        if ( $id eq $datas->{_session_id} ) {
-            $datas = {};
-        }
-
-        # Delete Apache local cache
-        if ( $refLocalStorage and $refLocalStorage->get($id) ) {
-            $refLocalStorage->remove($id);
-        }
-    }
-}
-
-## @rmethod protected int unlog(Apache::RequestRec apacheRequest)
-# Call localUnlog() then goToPortal() to unlog the current user.
-# @return Apache2::Const value returned by goToPortal()
-sub unlog ($$) {
-    my $class;
-    ( $class, $apacheRequest ) = splice @_;
-    $class->localUnlog;
-    $class->updateStatus( $apacheRequest->connection->remote_ip,
-        $apacheRequest->uri, 'LOGOUT' );
-    return $class->goToPortal( '/', 'logout=1' );
-}
-
-## @rmethod protected int redirectFilter(string url, Apache2::Filter f)
-# Launch the current HTTP request then redirects the user to $url.
-# Used by logout_app and logout_app_sso targets
-# @param $url URL to redirect the user
-# @param $f Current Apache2::Filter object
-# @return Apache2::Const::REDIRECT
-sub redirectFilter {
-    my $class = shift;
-    my $url   = shift;
-    my $f     = shift;
-    unless ( $f->ctx ) {
-
-        # Here, we can use Apache2 functions instead of lmSetHeaderOut because
-        # this function is used only with Apache2.
-        $f->r->status(REDIRECT);
-        $f->r->status_line("303 See Other");
-        $f->r->headers_out->unset('Location');
-        $f->r->err_headers_out->set( 'Location' => $url );
-        $f->ctx(1);
-    }
-    while ( $f->read( my $buffer, 1024 ) ) {
-    }
-    $class->updateStatus(
-        (
-              $datas->{$whatToTrace}
-            ? $datas->{$whatToTrace}
-            : $f->r->connection->remote_ip
-        ),
-        'filter',
-        'REDIRECT'
-    );
-    return REDIRECT;
-}
-
-## @rmethod int status(Apache2::RequestRec $r)
-# Get the result from the status process and launch a PerlResponseHandler to
-# display it.
-# @param $r Current request
-# @return Apache2::Const::OK
-sub status($$) {
-    my ( $class, $r ) = splice @_;
-    $class->lmLog( "$class: request for status", 'debug' );
-    return $class->abort("$class: status page can not be displayed")
-    	unless ( $statusPipe and $statusOut );
-    $r->handler("perl-script");
-    print $statusPipe "STATUS" . ( $r->args ? " " . $r->args : '' ) . "\n";
-    my $buf;
-    while (<$statusOut>) {
-        last if (/^END$/);
-        $buf .= $_;
-    }
-    if ( MP() == 2 ) {
-        $r->push_handlers(
-            'PerlResponseHandler' => sub {
-                my $r = shift;
-                $r->content_type('text/html; charset=UTF-8');
-                $r->print($buf);
-                OK;
-            }
-        );
-    }
-    else {
-        $r->push_handlers(
-            'PerlHandler' => sub {
-                my $r = shift;
-                $r->content_type('text/html; charset=UTF-8');
-                $r->send_http_header;
-                $r->print($buf);
-                OK;
-            }
-        );
-    }
-    return OK;
 }
 
 1;
@@ -1512,7 +1078,7 @@ This is done to be compatible both with Apache 1 and 2.
 =head1 SEE ALSO
 
 L<Lemonldap::NG::Handler>, L<Lemonldap::NG::Portal>,
-http://wiki.lemonldap.objectweb.org/xwiki/bin/view/NG/Presentation
+L<http://lemonldap-ng.org/>
 
 =head1 AUTHOR
 
@@ -1521,7 +1087,7 @@ Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 =head1 BUG REPORT
 
 Use OW2 system to report bug or ask for features:
-L<http://forge.objectweb.org/tracker/?group_id=274>
+L<http://jira.ow2.org>
 
 =head1 DOWNLOAD
 
@@ -1533,7 +1099,445 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 Copyright (C) 2005, 2007, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.4 or,
+it under the same terms as Perl itself, either Perl version 5.10.0 or,
 at your option, any later version of Perl 5 you may have available.
 
 =cut
+## @rmethod int abort(string mess)
+# Logs message and exit or redirect to the portal if "useRedirectOnError" is
+# set to true.
+# @param $mess Message to log
+# @return Apache2::Const::REDIRECT or Apache2::Const::SERVER_ERROR
+sub abort {
+    my ( $class, $mess ) = splice @_;
+
+    # If abort is called without a valid request, fall to die
+    eval {
+        my $args = $apacheRequest->args;
+        my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
+
+        # Set error 500 in logs even if "useRedirectOnError" is set
+        $apacheRequest->push_handlers(
+            PerlLogHandler => sub { $_[0]->status(SERVER_ERROR); DECLINED; } );
+        $class->lmLog( $mess, 'error' );
+
+        # Redirect or die
+        if ($useRedirectOnError) {
+            $class->lmLog( "Use redirect for error", 'debug' );
+            return $class->goToPortal( $uri, 'lmError=500' );
+        }
+        else {
+            return SERVER_ERROR;
+        }
+    };
+    die $mess if ($@);
+}
+
+## @rmethod protected int handler_mp1()
+# Launch run() when used under mod_perl version 1
+# @return Apache constant
+sub handler_mp1 ($$) { shift->run(@_); }
+
+## @rmethod protected int logout_mp1()
+# Launch unlog() when used under mod_perl version 1
+# @return Apache constant
+sub logout_mp1 ($$) { shift->unlog(@_); }
+
+## @imethod void init(hashRef args)
+# Calls localInit() and globalInit().
+# @param $args reference to the initialization hash
+sub init($$) {
+    my $class = shift;
+    $class->localInit(@_);
+    $class->globalInit(@_);
+}
+
+## @imethod protected void locationRulesInit(hashRef args)
+# Compile rules.
+# Rules are stored in $args->{locationRules} that contains regexp=>test
+# expressions where :
+# - regexp is used to test URIs
+# - test contains an expression used to grant the user
+#
+# This function creates 2 arrays containing :
+# - the list of the compiled regular expressions
+# - the list of the compiled functions (compiled with conditionSub())
+# @param $args reference to the configuration hash
+sub locationRulesInit {
+    my ( $class, $args ) = splice @_;
+    $locationCount = 0;
+
+    # Pre compilation : both regexp and conditions
+    foreach ( sort keys %{ $args->{locationRules} } ) {
+        if ( $_ eq 'default' ) {
+            ( $defaultCondition, $defaultProtection ) =
+              $class->conditionSub( $args->{locationRules}->{$_} );
+        }
+        else {
+            (
+                $locationCondition->[$locationCount],
+                $locationProtection->[$locationCount]
+            ) = $class->conditionSub( $args->{locationRules}->{$_} );
+            $locationRegexp->[$locationCount] = qr/$_/;
+            $locationCount++;
+        }
+    }
+
+    # Default police: all authenticated users are accepted
+    ( $defaultCondition, $defaultProtection ) = $class->conditionSub('accept')
+      unless ($defaultCondition);
+    1;
+}
+
+## @imethod protected void forgeHeadersInit(hashRef args)
+# Create the &$forgeHeaders subroutine used to insert
+# headers into the HTTP request.
+# @param $args reference to the configuration hash
+sub forgeHeadersInit {
+    my ( $class, $args ) = splice @_;
+
+    # Creation of the subroutine who will generate headers
+    my %tmp;
+    if ( $args->{exportedHeaders} ) {
+        %tmp = %{ $args->{exportedHeaders} };
+    }
+    else {
+        %tmp = ( 'User-Auth' => '$uid' );
+    }
+    foreach ( keys %tmp ) {
+        $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
+        $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
+    }
+
+    my $sub;
+    foreach ( keys %tmp ) {
+        $sub .= "'$_' => join('',split(/[\\r\\n]+/,$tmp{$_})),";
+    }
+    $forgeHeaders = (
+        SAFEWRAP
+        ? $class->safe->wrap_code_ref( $class->safe->reval("sub{$sub}") )
+        : $class->safe->reval("sub{return($sub)}")
+    );
+    $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}", 'error' )
+      if ($@);
+    1;
+}
+
+## @imethod protected buildPostForm(string url, int count)
+# Build form that will be posted by client
+# Fill an input hidden with fake value to
+# reach the size of initial request
+# @param url Target of POST
+# @param count Fake input size
+# @return Apache2::Const::OK
+sub buildPostForm {
+    my $class = shift;
+    my $url   = shift;
+    my $count = shift || 1000;
+    $apacheRequest->handler("perl-script");
+    $apacheRequest->set_handlers(
+        'PerlResponseHandler' => sub {
+            my $r = shift;
+            $r->content_type('text/html; charset=UTF-8');
+            $r->print(
+qq{<html><body onload="document.getElementById('f').submit()"><form id="f" method="post" action="$url"><input type=hidden name="a" value="}
+                  . sprintf( "%0" . $count . "d", 1 )
+                  . qq{"/><input type="submit" value="Ok"/></form></body></html>}
+            );
+            OK;
+        }
+    );
+    OK;
+}
+
+## @rmethod protected void sendHeaders()
+# Launch function compiled by forgeHeadersInit()
+sub sendHeaders {
+    lmSetHeaderIn( $apacheRequest, &$forgeHeaders );
+}
+
+## @rmethod protected boolean isProtected()
+# @return True if URI isn't protected (rule "unprotect")
+sub isProtected {
+    my ( $class, $uri ) = splice @_;
+    for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
+        return $locationProtection->[$i]
+          if ( $uri =~ $locationRegexp->[$i] );
+    }
+    return $defaultProtection;
+}
+
+## @rmethod protected boolean grant(string uri)
+# Grant or refuse client using compiled regexp and functions
+# @param uri URI requested
+# @return True if the user is granted to access to the current URL
+sub grant {
+    my ( $class, $uri ) = splice @_;
+    for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
+        return &{ $locationCondition->[$i] }($datas)
+          if ( $uri =~ $locationRegexp->[$i] );
+    }
+    return &$defaultCondition($datas);
+}
+
+## @imethod protected void postUrlInit()
+# Prepare methods to post form attributes
+sub postUrlInit {
+    my ( $class, $args ) = splice @_;
+
+    # Do nothing if no POST configured
+    return unless ( $args->{post} );
+
+    # Load required modules
+    eval 'use Apache2::Filter;use URI';
+
+    # Prepare transform sub
+    $transform = {};
+
+    #  Browse all POST URI
+    while ( my ( $url, $d ) = each( %{ $args->{post} } ) ) {
+
+        # Where to POST
+        $d->{postUrl} ||= $url;
+
+        # Register POST form for POST URL
+        $transform->{ $d->{postUrl} } =
+          sub { $class->buildPostForm( $d->{postUrl} ) }
+          if ( $url ne $d->{postUrl} );
+
+        # Get datas to POST
+        my $expr = $d->{expr};
+        my %postdata;
+
+        # Manage old and new configuration format
+        # OLD: expr => 'param1 => value1, param2 => value2',
+        # NEW : expr => { param1 => value1, param2 => value2 },
+        if ( ref $expr eq 'HASH' ) {
+            %postdata = %$expr;
+        }
+        else {
+            %postdata = split /(?:\s*=>\s*|\s*,\s*)/, $expr;
+        }
+
+        # Build string for URI::query_form
+        my $tmp;
+        foreach ( keys %postdata ) {
+            $postdata{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
+            $postdata{$_} = "'$postdata{$_}'" if ( $postdata{$_} =~ /^\w+$/ );
+            $tmp .= "'$_'=>$postdata{$_},";
+        }
+
+        # Build subroutine
+        my $sub = "sub{
+            my \$f = shift;
+            my \$l;
+            unless(\$f->ctx){
+            \$f->ctx(1);
+            my \$u=URI->new('http:');
+            \$u->query_form({$tmp});
+            my \$s=\$u->query();
+            \$l = \$f->r->headers_in->{'Content-Length'};
+            \$f->r->headers_in->set( 'Content-Length' => length(\$s) );
+            \$f->r->headers_in->set( 'Content-Type' => 'application/x-www-form-urlencoded' );
+            \$f->print(\$s);
+            while ( \$f->read( my \$b, \$l ) ) {}
+            \$f->seen_eos(1);
+            }
+            return OK;
+        }"
+          ;
+        $sub = (
+            SAFEWRAP
+            ? $class->safe->wrap_code_ref( $class->safe->reval($sub) )
+            : $class->safe->reval($sub)
+        );
+        $class->lmLog( "Compiling POST request for $url", 'debug' );
+        $transform->{$url} = sub {
+            return $class->buildPostForm($url)
+              if ( $apacheRequest->method ne 'POST' );
+            $apacheRequest->add_input_filter($sub);
+            OK;
+          }
+    }
+}
+
+## @rmethod protected transformUri(string uri)
+# Transform URI to replay POST forms
+# @param uri URI to catch
+# @return Apache2::Const
+sub transformUri {
+    my ( $class, $uri ) = splice @_;
+
+    if ( defined( $transform->{$uri} ) ) {
+        return &{ $transform->{$uri} };
+    }
+
+    OK;
+}
+
+## @method private string _buildUrl(string s)
+# Transform /<s> into http(s?)://<host>:<port>/s
+# @param $s path
+# @return URL
+sub _buildUrl {
+    my ( $class, $s ) = splice @_;
+    my $portString = $port || $apacheRequest->get_server_port();
+    $portString =
+        ( $https  && $portString == 443 ) ? ''
+      : ( !$https && $portString == 80 )  ? ''
+      :                                     ':' . $portString;
+    return
+        "http"
+      . ( $https ? "s" : "" ) . "://"
+      . $apacheRequest->get_server_name()
+      . $portString
+      . $s;
+}
+
+# Status daemon creation
+
+## @ifn protected void statusProcess()
+# Launch the status processus.
+sub statusProcess {
+    require IO::Pipe;
+    $statusPipe = IO::Pipe->new;
+    $statusOut  = IO::Pipe->new;
+    if ( my $pid = fork() ) {
+        $statusPipe->writer();
+        $statusOut->reader();
+        $statusPipe->autoflush(1);
+    }
+    else {
+        require Data::Dumper;
+        $statusPipe->reader();
+        $statusOut->writer();
+        my $fdin  = $statusPipe->fileno;
+        my $fdout = $statusOut->fileno;
+        open STDIN,  "<&$fdin";
+        open STDOUT, ">&$fdout";
+        my @tmp = ();
+        push @tmp, "-I$_" foreach (@INC);
+        exec 'perl', '-MLemonldap::NG::Handler::Status',
+          @tmp,
+          '-e',
+          '&Lemonldap::NG::Handler::Status::run('
+          . $localStorage . ','
+          . Data::Dumper->new( [$localStorageOptions] )->Terse(1)->Dump . ');';
+    }
+}
+
+## @rmethod int unprotect()
+# Used to unprotect an area.
+# To use it, set "PerlHeaderParserHandler My::Package->unprotect" Apache
+# configuration file.
+# It replace run() by doing nothing.
+# @return Apache2::Const::OK
+sub unprotect {
+    OK;
+}
+
+## @rmethod protected void localUnlog()
+# Delete current user from local cache entry.
+sub localUnlog {
+    my $class = shift;
+    if ( my $id = $class->fetchId ) {
+
+        # Delete Apache thread datas
+        if ( $id eq $datas->{_session_id} ) {
+            $datas = {};
+        }
+
+        # Delete Apache local cache
+        if ( $refLocalStorage and $refLocalStorage->get($id) ) {
+            $refLocalStorage->remove($id);
+        }
+    }
+}
+
+## @rmethod protected int unlog(Apache::RequestRec apacheRequest)
+# Call localUnlog() then goToPortal() to unlog the current user.
+# @return Apache2::Const value returned by goToPortal()
+sub unlog ($$) {
+    my $class;
+    ( $class, $apacheRequest ) = splice @_;
+    $class->localUnlog;
+    $class->updateStatus( $apacheRequest->connection->remote_ip,
+        $apacheRequest->uri, 'LOGOUT' );
+    return $class->goToPortal( '/', 'logout=1' );
+}
+
+## @rmethod protected int redirectFilter(string url, Apache2::Filter f)
+# Launch the current HTTP request then redirects the user to $url.
+# Used by logout_app and logout_app_sso targets
+# @param $url URL to redirect the user
+# @param $f Current Apache2::Filter object
+# @return Apache2::Const::REDIRECT
+sub redirectFilter {
+    my $class = shift;
+    my $url   = shift;
+    my $f     = shift;
+    unless ( $f->ctx ) {
+
+        # Here, we can use Apache2 functions instead of lmSetHeaderOut because
+        # this function is used only with Apache2.
+        $f->r->status(REDIRECT);
+        $f->r->status_line("303 See Other");
+        $f->r->headers_out->unset('Location');
+        $f->r->err_headers_out->set( 'Location' => $url );
+        $f->ctx(1);
+    }
+    while ( $f->read( my $buffer, 1024 ) ) {
+    }
+    $class->updateStatus(
+        (
+              $datas->{$whatToTrace}
+            ? $datas->{$whatToTrace}
+            : $f->r->connection->remote_ip
+        ),
+        'filter',
+        'REDIRECT'
+    );
+    return REDIRECT;
+}
+
+## @rmethod int status(Apache2::RequestRec $r)
+# Get the result from the status process and launch a PerlResponseHandler to
+# display it.
+# @param $r Current request
+# @return Apache2::Const::OK
+sub status($$) {
+    my ( $class, $r ) = splice @_;
+    $class->lmLog( "$class: request for status", 'debug' );
+    return $class->abort("$class: status page can not be displayed")
+      unless ( $statusPipe and $statusOut );
+    $r->handler("perl-script");
+    print $statusPipe "STATUS" . ( $r->args ? " " . $r->args : '' ) . "\n";
+    my $buf;
+    while (<$statusOut>) {
+        last if (/^END$/);
+        $buf .= $_;
+    }
+    if ( MP() == 2 ) {
+        $r->push_handlers(
+            'PerlResponseHandler' => sub {
+                my $r = shift;
+                $r->content_type('text/html; charset=UTF-8');
+                $r->print($buf);
+                OK;
+            }
+        );
+    }
+    else {
+        $r->push_handlers(
+            'PerlHandler' => sub {
+                my $r = shift;
+                $r->content_type('text/html; charset=UTF-8');
+                $r->send_http_header;
+                $r->print($buf);
+                OK;
+            }
+        );
+    }
+    return OK;
+}
+
