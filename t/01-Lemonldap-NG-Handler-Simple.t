@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 14;
+use Test::More tests => 15;
 BEGIN { use_ok( 'Lemonldap::NG::Handler::Simple', ':all' ) }
 
 #########################
@@ -48,8 +48,12 @@ ok(
 );
 
 ok( $h->defaultValuesInit(), 'defaultValuesInit' );
+
+# Test simple portal subroutine
+# See t/02-* for complex portal subroutine
 ok( ( $h->portalInit( { portal => 'http://auth.example.com' } ) or 1 ),
     'portalInit' );
+ok( $h->portal() eq 'http://auth.example.com', 'portal' );
 ok(
     $h->globalStorageInit(
         {

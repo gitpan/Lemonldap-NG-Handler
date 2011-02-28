@@ -28,7 +28,7 @@ use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.0.0';
+our $VERSION = '1.0.2';
 
 our %EXPORT_TAGS;
 
@@ -246,10 +246,10 @@ sub regRemoteIp {
 sub lmSetHeaderIn {
     my ( $r, %hdr ) = splice @_;
     while ( my ( $h, $v ) = each %hdr ) {
-    if ( MP() == 2 ) {
+        if ( MP() == 2 ) {
             $r->headers_in->set( $h => $v );
-    }
-    elsif ( MP() == 1 ) {
+        }
+        elsif ( MP() == 1 ) {
             $r->header_in( $h => $v );
         }
     }
@@ -346,10 +346,10 @@ sub safe {
             }";
         $class->lmLog( $@, 'error' ) if ($@);
     }
-    $safe->share_from( 'main', [ '%ENV' ] );
+    $safe->share_from( 'main', ['%ENV'] );
     $safe->share_from( 'Lemonldap::NG::Common::Safelib',
         $Lemonldap::NG::Common::Safelib::functions );
-    $safe->share( '&encode_base64', '$datas', '&portal', @t );
+    $safe->share( '&encode_base64', '$datas', '&portal', '$apacheRequest', @t );
 
     return $safe;
 }
@@ -488,45 +488,49 @@ sub conditionSub {
 
     # Since filter exists only with Apache>=2, logout_app and logout_app_sso
     # targets are available only for it.
-    if ( MP() == 2 ) {
+    # This error can also appear with Manager configured as CGI script
+    if ( $cond =~ /^logout_app/i and MP() < 2 ) {
+        $class->lmLog( "Rules logout_app and logout_app_sso require Apache>=2",
+            'warn' );
+        return ( sub { 1 }, 1 );
+    }
 
-        # logout_app
-        if ( $cond =~ /^logout_app(?:\s+(.*))?$/i ) {
-            my $u = $1 || $class->portal();
-            eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
-            return (
-                sub {
-                    $apacheRequest->add_output_filter(
-                        sub {
-                            return $class->redirectFilter( $u, @_ );
-                        }
-                    );
-                    1;
-                },
-                1
-            );
-        }
-        elsif ( $cond =~ /^logout_app_sso(?:\s+(.*))?$/i ) {
-            eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
-            my $u = $1 || $class->portal();
-            return (
-                sub {
-                    $class->localUnlog;
-                    $apacheRequest->add_output_filter(
-                        sub {
-                            return $class->redirectFilter(
-                                $class->portal() . "?url="
-                                  . $class->encodeUrl($u)
-                                  . "&logout=1",
-                                @_
-                            );
-                        }
-                    );
-                    1;
-                },
-                1
-            );
-        }
+    # logout_app
+    if ( $cond =~ /^logout_app(?:\s+(.*))?$/i ) {
+        my $u = $1 || $class->portal();
+        eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
+        return (
+            sub {
+                $apacheRequest->add_output_filter(
+                    sub {
+                        return $class->redirectFilter( $u, @_ );
+                    }
+                );
+                1;
+            },
+            1
+        );
+    }
+    elsif ( $cond =~ /^logout_app_sso(?:\s+(.*))?$/i ) {
+        eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
+        my $u = $1 || $class->portal();
+        return (
+            sub {
+                $class->localUnlog;
+                $apacheRequest->add_output_filter(
+                    sub {
+                        return $class->redirectFilter(
+                            $class->portal() . "?url="
+                              . $class->encodeUrl($u)
+                              . "&logout=1",
+                            @_
+                        );
+                    }
+                );
+                1;
+            },
+            1
+        );
     }
 
     # Replace some strings in condition
@@ -586,7 +590,7 @@ sub portalInit {
     my ( $class, $args ) = splice @_;
     die("portal parameter required") unless ( $args->{portal} );
     if ( $args->{portal} =~ /[\$\(&\|"']/ ) {
-        my $portal = $class->conditionSub( $args->{portal} );
+        my ($portal) = $class->conditionSub( $args->{portal} );
         eval "sub portal {return &\$portal}";
     }
     else {
@@ -1471,7 +1475,7 @@ sub unlog ($$) {
 # Used by logout_app and logout_app_sso targets
 # @param $url URL to redirect the user
 # @param $f Current Apache2::Filter object
-# @return Apache2::Const::REDIRECT
+# @return Apache2::Const::OK
 sub redirectFilter {
     my $class = shift;
     my $url   = shift;
@@ -1497,7 +1501,7 @@ sub redirectFilter {
         'filter',
         'REDIRECT'
     );
-    return REDIRECT;
+    return OK;
 }
 
 ## @rmethod int status(Apache2::RequestRec $r)

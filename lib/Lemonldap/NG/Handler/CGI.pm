@@ -17,7 +17,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 
 #link Lemonldap::NG::Handler::_CGI protected _handler
 
-our $VERSION = '1.0.0';
+our $VERSION = '1.0.2';
 
 ## @cmethod Lemonldap::NG::Handler::CGI new(hashRef args)
 # Constructor.
@@ -33,7 +33,7 @@ sub new {
     }
     unless ( eval { Lemonldap::NG::Handler::_CGI->testConf() } == OK ) {
         if ( $_[0]->{noAbort} ) {
-            $self->{noConf} = $@;
+            $self->{_noConf} = $@;
         }
         else {
             $class->abort( "Unable to get configuration", $@ );
@@ -91,8 +91,8 @@ sub authenticate {
     my $self = shift;
     $self->abort(
         "Can't authenticate because configuration has not been loaded",
-        $self->{noConf} )
-      if ( $self->{noConf} );
+        $self->{_noConf} )
+      if ( $self->{_noConf} );
     my %cookies = fetch CGI::Cookie;
     my $id;
     unless ( $cookies{$cookieName} and $id = $cookies{$cookieName}->value ) {
@@ -137,8 +137,8 @@ sub authorize {
 sub testUri {
     my $self = shift;
     $self->abort( "Can't test URI because configuration has not been loaded",
-        $self->{noConf} )
-      if ( $self->{noConf} );
+        $self->{_noConf} )
+      if ( $self->{_noConf} );
     my $uri = shift;
     my $host =
       ( $uri =~ s#^(?:https?://)?([^/]*)/#/# ) ? $1 : $ENV{SERVER_NAME};
@@ -174,11 +174,23 @@ sub goToPortal {
 # Builds current URL including "http://" and server name.
 # @return URL_string
 sub _uri {
-    return
-        'http'
-      . ( $https ? 's' : '' ) . '://'
-      . $ENV{SERVER_NAME}
+    my $vhost = $ENV{SERVER_NAME};
+    my $portString =
+         $port->{$vhost}
+      || $port->{_}
+      || $ENV{SERVER_PORT};
+    my $_https =
+      ( defined( $https->{$vhost} ) ? $https->{$vhost} : $https->{_} );
+    $portString =
+        ( $_https  && $portString == 443 ) ? ''
+      : ( !$_https && $portString == 80 )  ? ''
+      :                                      ':' . $portString;
+    my $url = "http"
+      . ( $_https ? "s" : "" ) . "://"
+      . $vhost
+      . $portString
       . $ENV{REQUEST_URI};
+    return $url;
 }
 
 ## @class

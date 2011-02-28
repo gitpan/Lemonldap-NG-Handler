@@ -25,6 +25,7 @@ MANIFEST			This list of files
 META.yml
 README
 t/01-Lemonldap-NG-Handler-Simple.t
+t/02-Lemonldap-NG-Handler-Portal.t
 t/05-Lemonldap-NG-Handler-Vhost.t
 t/10-Lemonldap-NG-Handler-SharedConf.t
 t/11-Lemonldap-NG-Handler-Status.t
