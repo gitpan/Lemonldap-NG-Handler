@@ -10,7 +10,7 @@ use strict;
 use Lemonldap::NG::Handler::Simple qw(:apache :headers :traces);
 use LWP::UserAgent;
 
-our $VERSION = '1.0.0';
+our $VERSION = '1.1.0';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
@@ -89,8 +89,10 @@ sub run($$) {
     if ( $r->method eq "POST" ) {
         my $len = $r->headers_in->{'Content-Length'};
         my $buf;
-        $r->read( $buf, $len );
-        $request->content($buf);
+        if ($len) {
+            $r->read( $buf, $len );
+            $request->content($buf);
+        }
     }
     $headers_set = 0;
 

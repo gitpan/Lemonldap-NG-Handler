@@ -15,7 +15,7 @@ WriteMakefile(
         'Apache::Session'       => 0,
         'LWP::UserAgent'        => 0,
         'Cache::Cache'          => 0,
-        'Lemonldap::NG::Common' => '1.0.6',
+        'Lemonldap::NG::Common' => '1.1.0',
         'CGI'                   => 3.08,
         'URI'                   => 0,
     },    # e.g., Module::Name => 1.1

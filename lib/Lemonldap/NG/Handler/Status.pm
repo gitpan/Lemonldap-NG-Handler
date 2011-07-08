@@ -9,7 +9,7 @@ use Data::Dumper;
 
 #inherits Cache::Cache
 
-our $VERSION = '1.0.0';
+our $VERSION = '1.1.0';
 
 our $status   = {};
 our $activity = [];
@@ -83,6 +83,8 @@ sub portalTab {
         63 => 'PORTAL_OPENID_BADID',
         64 => 'PORTAL_MISSINGREQATTR',
         65 => 'PORTAL_BADPARTNER',
+        66 => 'PORTAL_MAILCONFIRMATION_ALREADY_SENT',
+        67 => 'PORTAL_PASSWORDFORMEMPTY',
     };
 }
 
