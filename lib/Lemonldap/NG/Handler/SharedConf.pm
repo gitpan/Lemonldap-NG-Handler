@@ -27,7 +27,7 @@ use base qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
 #parameter reloadTime Time in second between 2 configuration check (600)
 
-our $VERSION    = '1.0.0';
+our $VERSION    = '1.1.1';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -142,15 +142,16 @@ sub testConf {
     my $conf = $lmConf->getConf( { local => $local } );
     unless ( ref($conf) ) {
         $class->lmLog(
-"$class: Unable to load configuration : $Lemonldap::NG::Common::Conf::msg",
+"$class: Unable to load configuration: $Lemonldap::NG::Common::Conf::msg",
             'error'
         );
         return $cfgNum ? OK : SERVER_ERROR;
     }
     if ( !$cfgNum or $cfgNum != $conf->{cfgNum} ) {
         $class->lmLog(
-            "$class: get configuration ($Lemonldap::NG::Common::Conf::msg)",
-            'debug' );
+"$class: get configuration $conf->{cfgNum} ($Lemonldap::NG::Common::Conf::msg)",
+            'debug'
+        );
         $lastReload = time();
         return $class->setConf($conf);
     }
