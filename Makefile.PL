@@ -12,12 +12,13 @@ WriteMakefile(
     BUILD_REQUIRES =>
       { 'IO::Pipe' => 0, 'Test::MockObject' => 0, 'Digest::SHA1' => 0 },
     PREREQ_PM => {
-        'Apache::Session'       => 0,
-        'LWP::UserAgent'        => 0,
-        'Cache::Cache'          => 0,
-        'Lemonldap::NG::Common' => '1.1.1',
-        'CGI'                   => 3.08,
-        'URI'                   => 0,
+        'Apache::Session'                => 0,
+        'LWP::UserAgent'                 => 0,
+        'Cache::Cache'                   => 0,
+        'Lemonldap::NG::Common'          => '1.1.2',
+        'CGI'                            => 3.08,
+        'URI'                            => 0,
+        'Apache::Session::Generate::MD5' => 0,
     },    # e.g., Module::Name => 1.1
     (
         $] >= 5.005

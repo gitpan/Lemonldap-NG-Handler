@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::MD5;
 
-our $VERSION = '1.0.0';
+our $VERSION = '1.1.2';
 
 # Shared variables
 our ( $sympaSecret, $sympaMailKey );
@@ -80,7 +80,7 @@ sub run {
     $tmp = lmHeaderIn( $r, 'Cookie' );
     $tmp =~ s/\bsympauser=[^,;]*[,;]?//;
     $tmp .= $tmp ? ";$str" : $str;
-    lmSetHeaderIn( $r, 'Cookie' => $tmp );
+    $class->lmSetHeaderIn( $r, 'Cookie' => $tmp );
 
     # Return SUPER::run() result
     return $ret;

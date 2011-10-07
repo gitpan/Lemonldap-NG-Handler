@@ -13,7 +13,7 @@ use Lemonldap::NG::Handler::Simple qw(:locationRules :headers :post :apache)
 use MIME::Base64;
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
-our $VERSION = '1.1.0';
+our $VERSION = '1.1.2';
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables
@@ -124,7 +124,7 @@ sub sendHeaders {
     my $vhost;
     $vhost = $apacheRequest->hostname;
     if ( defined( $forgeHeaders->{$vhost} ) ) {
-        lmSetHeaderIn( $apacheRequest, &{ $forgeHeaders->{$vhost} } );
+        $class->lmSetHeaderIn( $apacheRequest, &{ $forgeHeaders->{$vhost} } );
     }
 }
 

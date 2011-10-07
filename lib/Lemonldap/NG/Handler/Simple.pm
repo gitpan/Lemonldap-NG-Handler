@@ -28,7 +28,7 @@ use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.1.0';
+our $VERSION = '1.1.2';
 
 our %EXPORT_TAGS;
 
@@ -240,13 +240,13 @@ sub regRemoteIp {
     return $str;
 }
 
-## @rfn void lmSetHeaderIn(Apache2::RequestRec r, string h, string v)
+## @rmethod void lmSetHeaderIn(Apache2::RequestRec r, string h, string v)
 # Set an HTTP header in the HTTP request.
 # @param $r Current request
 # @param $h Name of the header
 # @param $v Value of the header
 sub lmSetHeaderIn {
-    my ( $r, %hdr ) = splice @_;
+    my ( $class, $r, %hdr ) = splice @_;
     while ( my ( $h, $v ) = each %hdr ) {
         if ( MP() == 2 ) {
             $r->headers_in->set( $h => $v );
@@ -254,6 +254,7 @@ sub lmSetHeaderIn {
         elsif ( MP() == 1 ) {
             $r->header_in( $h => $v );
         }
+        $class->lmLog( "Send header $h with value $v", 'debug' );
     }
 }
 
@@ -318,6 +319,53 @@ sub lmHeaderOut {
 }
 
 ##############################
+# Fake Safe jail subroutines #
+##############################
+
+## @method reval
+# Fake reval method if useSafeJail desactivated
+sub reval {
+    my ( $class, $e ) = splice @_;
+    return eval $e;
+}
+
+## @method wrap_code_ref
+# Fake wrap_code_ref method if useSafeJail desactivated
+sub wrap_code_ref {
+    my ( $class, $e ) = splice @_;
+    return $e;
+}
+
+## @method share
+# Fake share method if useSafeJail desactivated
+sub share {
+    my ( $class, @vars ) = splice @_;
+    $class->share_from( scalar(caller), \@vars );
+}
+
+## @method share_form
+# Fake share_from method if useSafeJail desactivated
+sub share_from {
+    my ( $class, $pkg, $vars ) = splice @_;
+
+    no strict 'refs';
+    foreach my $arg (@$vars) {
+        my ( $var, $type );
+        $type = $1 if ( $var = $arg ) =~ s/^(\W)//;
+        for ( 1 .. 2 ) {    # assign twice to avoid any 'used once' warnings
+            *{$var} =
+                ( !$type ) ? \&{ $pkg . "::$var" }
+              : ( $type eq '&' ) ? \&{ $pkg . "::$var" }
+              : ( $type eq '$' ) ? \${ $pkg . "::$var" }
+              : ( $type eq '@' ) ? \@{ $pkg . "::$var" }
+              : ( $type eq '%' ) ? \%{ $pkg . "::$var" }
+              : ( $type eq '*' ) ? *{ $pkg . "::$var" }
+              :                    undef;
+        }
+    }
+}
+
+##############################
 # Initialization subroutines #
 ##############################
 
@@ -353,30 +401,17 @@ sub safe {
     if ($useSafeJail) {
         $safe = new Safe;
         $safe->share_from( 'main', ['%ENV'] );
-        $safe->share_from( 'Lemonldap::NG::Common::Safelib',
-            $Lemonldap::NG::Common::Safelib::functions );
-        $safe->share( '&encode_base64', '$datas', '&portal', '$apacheRequest',
-            @t );
     }
     else {
         $safe = $class;
     }
 
+    # Share objets with Safe jail
+    $safe->share_from( 'Lemonldap::NG::Common::Safelib',
+        $Lemonldap::NG::Common::Safelib::functions );
+    $safe->share( '&encode_base64', '$datas', '&portal', '$apacheRequest', @t );
+
     return $safe;
-}
-
-## @method reval
-# Fake reval method if useSafeJail desactivated
-sub reval {
-    my ( $class, $e ) = splice @_;
-    return eval $e;
-}
-
-## @method wrap_code_ref
-# Fake wrap_code_ref method if useSafeJail desactivated
-sub wrap_code_ref {
-    my ( $class, $e ) = splice @_;
-    return $e;
 }
 
 ## @imethod void localInit(hashRef args)
@@ -742,7 +777,7 @@ sub hideCookie {
     $class->lmLog( "$class: removing cookie", 'debug' );
     my $tmp = lmHeaderIn( $apacheRequest, 'Cookie' );
     $tmp =~ s/$cookieName(?:http)?[^,;]*[,;]?//og;
-    lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
+    $class->lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
 }
 
 ## @rmethod protected string encodeUrl(string url)
@@ -1286,7 +1321,8 @@ qq{<html><body onload="document.getElementById('f').submit()"><form id="f" metho
 ## @rmethod protected void sendHeaders()
 # Launch function compiled by forgeHeadersInit()
 sub sendHeaders {
-    lmSetHeaderIn( $apacheRequest, &$forgeHeaders );
+    my ($class) = splice @_;
+    $class->lmSetHeaderIn( $apacheRequest, &$forgeHeaders );
 }
 
 ## @rmethod protected boolean isProtected()

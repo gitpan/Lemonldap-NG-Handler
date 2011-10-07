@@ -31,6 +31,8 @@ t/02-Lemonldap-NG-Handler-Portal.t
 t/05-Lemonldap-NG-Handler-Vhost.t
 t/10-Lemonldap-NG-Handler-SharedConf.t
 t/11-Lemonldap-NG-Handler-Status.t
+t/12-Lemonldap-NG-Handler-Safe.t
+t/13-Lemonldap-NG-Handler-Fake-Safe.t
 t/20-Lemonldap-NG-Handler-CDA.t
 t/30-Lemonldap-NG-Handler-CGI.t
 t/40-Lemonldap-NG-Handler-Proxy.t
