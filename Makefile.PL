@@ -10,12 +10,12 @@ WriteMakefile(
     PMLIBDIRS    => ['lib'],
     META_MERGE   => { 'recommends' => { 'SOAP::Lite' => 0, }, },
     BUILD_REQUIRES =>
-      { 'IO::Pipe' => 0, 'Test::MockObject' => 0, 'Digest::SHA1' => 0 },
+      { 'IO::Pipe' => 0, 'Test::MockObject' => 0 },
     PREREQ_PM => {
         'Apache::Session'                => 0,
         'LWP::UserAgent'                 => 0,
         'Cache::Cache'                   => 0,
-        'Lemonldap::NG::Common'          => '1.1.2',
+        'Lemonldap::NG::Common'          => '1.2.0',
         'CGI'                            => 3.08,
         'URI'                            => 0,
         'Apache::Session::Generate::MD5' => 0,

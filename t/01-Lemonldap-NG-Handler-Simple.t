@@ -18,7 +18,7 @@ ok(
     $h->localInit(
         {
             localStorage        => 'Cache::FileCache',
-            localStorageOptions => { 'namespace' => 'MyNamespaceTest', },
+            localStorageOptions => { 'namespace' => 'lemonldap-ng', },
         }
     ),
     'localInit'

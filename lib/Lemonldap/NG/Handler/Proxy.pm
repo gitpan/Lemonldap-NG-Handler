@@ -10,7 +10,7 @@ use strict;
 use Lemonldap::NG::Handler::Simple qw(:apache :headers :traces);
 use LWP::UserAgent;
 
-our $VERSION = '1.1.0';
+our $VERSION = '1.2.0';
 
 ##########################################
 # COMPATIBILITY WITH APACHE AND APACHE 2 #
@@ -132,13 +132,24 @@ sub headers {
     # Scan LWP response headers to generate Apache response headers
     my ( $location_old, $location_new ) = split /[;,]+/,
       $r->dir_config('LmLocationToReplace');
+    my ( $cookieDomain_old, $cookieDomain_new ) = split /[;,]+/,
+      $r->dir_config('LmCookieDomainToReplace');
+
     $response->scan(
         sub {
 
             # Replace Location headers
             $_[1] =~ s#$location_old#$location_new#o
               if ( $location_old and $location_new and $_[0] =~ /Location/i );
+
+            # Replace Set-Cookie headers
+            $_[1] =~ s#$cookieDomain_old#$cookieDomain_new#o
+              if (  $cookieDomain_old
+                and $cookieDomain_new
+                and $_[0] =~ /Set-Cookie/i );
+
             lmSetErrHeaderOut( $r, @_ );
+
             $class->lmLog(
                 "$class: header pushed to the client: " . $_[0] . ": " . $_[1],
                 'debug'
@@ -168,7 +179,8 @@ apache/conf/httpd.conf:
   SetHandler perl-script
   PerlHandler Lemonldap::NG::Handler::Proxy
   PerlSetVar LmProxyPass http://real-server.com/
-  PerlSetVar LmLocationToReplace http://real-server/,https://lemon.server/
+  PerlSetVar LmLocationToReplace http://real-server.com/,https://lemon.server/
+  PerlSetVar LmCookieDomainToReplace real-server.com,lemon.server
 
   # Or just on a Location
   PerlModule Lemonldap::NG::Handler::Proxy
@@ -176,7 +188,8 @@ apache/conf/httpd.conf:
     SetHandler perl-script
     PerlHandler Lemonldap::NG::Handler::Proxy
     PerlSetVar LmProxyPass https://real-server.com/
-    PerlSetVar LmLocationToReplace http://real-server/,https://lemon.server/
+    PerlSetVar LmLocationToReplace http://real-server.com/,https://lemon.server/
+    PerlSetVar LmCookieDomainToReplace real-server.com,lemon.server
   </Location>
 
 =head1 DESCRIPTION
@@ -192,6 +205,9 @@ manage redirections if the remote host use it without the good domain.
 
 =item * B<LmLocationToReplace> (optional): substitution to do to avoid bad
 redirections. See synopsys for usage.
+
+=item * B<LmCookieDomainToReplace> (optional): substitution to do to set cookies
+from proxied application. See synopsys for usage.
 
 =back
 

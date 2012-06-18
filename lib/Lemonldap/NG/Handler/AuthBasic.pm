@@ -60,7 +60,7 @@ sub run ($$) {
     $user =~ s/^Basic\s*//;
 
     # DEBUG
-    $class->lmLog( "debug : $user", 'notice' );
+    $class->lmLog( "user: $user", 'debug' );
     $id = md5_base64($user);
 
     # II - recover the user datas

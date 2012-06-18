@@ -16,6 +16,10 @@ BEGIN { use_ok('Lemonldap::NG::Handler::Simple') }
 my $h;
 $h = bless {}, 'Lemonldap::NG::Handler::Simple';
 
-ok($h->defaultValuesInit({ useSafeJail => 0, }), 'Disabling Safe Jail');
-like( $h->safe->reval("basic('login','password')"), "/^Basic bG9naW46cGFzc3dvcmQ=/" , 'basic extended function working without Safe Jail');
+ok( $h->defaultValuesInit( { useSafeJail => 0, } ), 'Disabling Safe Jail' );
+like(
+    $h->safe->reval("basic('login','password')"),
+    "/^Basic bG9naW46cGFzc3dvcmQ=/",
+    'basic extended function working without Safe Jail'
+);
 

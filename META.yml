@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Lemonldap-NG-Handler
-version:            1.1.2
+version:            1.2.0
 abstract:           The Apache protection module part of
 author:
     - Xavier Guimard <x.guimard@free.fr>
@@ -9,7 +9,6 @@ distribution_type:  module
 configure_requires:
     ExtUtils::MakeMaker:  0
 build_requires:
-    Digest::SHA1:      0
     IO::Pipe:          0
     Test::MockObject:  0
 requires:
@@ -17,17 +16,14 @@ requires:
     Apache::Session::Generate::MD5:  0
     Cache::Cache:         0
     CGI:                  3.08
-    Digest::SHA1:         0
-    IO::Pipe:             0
-    Lemonldap::NG::Common:  1.1.2
+    Lemonldap::NG::Common:  1.2.0
     LWP::UserAgent:       0
-    Test::MockObject:     0
     URI:                  0
 no_index:
     directory:
         - t
         - inc
-generated_by:       ExtUtils::MakeMaker version 6.55_02
+generated_by:       ExtUtils::MakeMaker version 6.57_05
 meta-spec:
     url:      http://module-build.sourceforge.net/META-spec-v1.4.html
     version:  1.4

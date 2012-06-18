@@ -5,7 +5,7 @@
 # Alias for Lemonldap::NG::Handler::SharedConf
 package Lemonldap::NG::Handler;
 
-our $VERSION = '1.1.2';
+our $VERSION = '1.2.0';
 use Lemonldap::NG::Handler::SharedConf;
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
@@ -71,7 +71,12 @@ configuration reload, so you don't need to restart Apache at each change:
     PerlHeaderParserHandler My::Package->refresh
   </Location>
   
-You can also unprotect an URI
+You can also disable access control for specific URIs, but be aware that
+this is not really secure, since session cookies are sent to the protected
+application (so they could be spoofed), and since a user could forge his
+own HTTP request headers and they would not be reset. To disable access
+control for specific URIs on a secure way, you should set access rule to
+'skip' instead.
 
   <Files "*.gif">
     PerlHeaderParserHandler My::Package->unprotect

@@ -16,8 +16,9 @@ BEGIN { use_ok('Lemonldap::NG::Handler::Simple') }
 my $h;
 $h = bless {}, 'Lemonldap::NG::Handler::Simple';
 
-ok($h->defaultValuesInit({ useSafeJail => 1, }), 'Enabling Safe Jail');
+ok( $h->defaultValuesInit( { useSafeJail => 1, } ), 'Enabling Safe Jail' );
 
 my $basic = $h->safe->reval("basic('login','password')");
-ok( ( !defined($basic) or defined($basic)), 'basic extended function can be undef with recent Safe Jail');
+ok( ( !defined($basic) or defined($basic) ),
+    'basic extended function can be undef with recent Safe Jail' );
 

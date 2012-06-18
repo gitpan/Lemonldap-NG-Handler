@@ -45,7 +45,7 @@ New usage:
     cda                 => 1,
     localStorage        => "Cache::FileCache",
     localStorageOptions => {
-        'namespace' => 'MyNamespace',
+        'namespace' => 'lemonldap-ng',
         'default_expires_in' => 600,
       },
     reloadTime          => 1200, # Default: 600

@@ -20,15 +20,19 @@ use Exporter 'import';
 use AutoLoader 'AUTOLOAD';
 use Safe;
 use Lemonldap::NG::Common::Safelib;    #link protected safe Safe object
+use Lemonldap::NG::Common::Crypto;
 require POSIX;
 use CGI::Util 'expires';
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
+use constant UNPROTECT        => 1;
+use constant SKIP             => 2;
+use constant MAINTENANCE_CODE => 503;
 
 #inherits Cache::Cache
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.1.2';
+our $VERSION = '1.2.0';
 
 our %EXPORT_TAGS;
 
@@ -48,7 +52,9 @@ our (
     $customFunctions,    $transform,           $cda,
     $childInitDone,      $httpOnly,            $cookieExpiration,
     $timeoutActivity,    $datasUpdate,         $useRedirectOnForbidden,
-    $useRedirectOnError, $useSafeJail,
+    $useRedirectOnError, $useSafeJail,         $securedCookie,
+    $key,                $cipher,              $headerList,
+    $maintenance,
 );
 
 ##########################################
@@ -73,16 +79,22 @@ BEGIN {
             qw(
               $forgeHeaders lmHeaderIn lmSetHeaderIn lmHeaderOut
               lmSetHeaderOut lmSetErrHeaderOut $cookieName $https $port
+              $securedCookie $key $cipher $headerList
               )
         ],
         traces => [qw( $whatToTrace $statusPipe $statusOut)],
         apache => [
             qw( MP OK REDIRECT FORBIDDEN DONE DECLINED SERVER_ERROR
-              $useRedirectOnForbidden $useRedirectOnError )
+              $useRedirectOnForbidden $useRedirectOnError $maintenance )
         ],
-        post    => [qw($transform postFilter)],
-        cda     => ['$cda'],
-        cookie  => [qw($cookieName $https $httpOnly $cookieExpiration)],
+        post   => [qw($transform postFilter)],
+        cda    => ['$cda'],
+        cookie => [
+            qw(
+              $cookieName $https $httpOnly $cookieExpiration
+              $securedCookie $key $cipher
+              )
+        ],
         session => ['$timeoutActivity'],
     );
     push( @EXPORT_OK, @{ $EXPORT_TAGS{$_} } ) foreach ( keys %EXPORT_TAGS );
@@ -148,7 +160,13 @@ BEGIN {
             threads::shared::share($useRedirectOnForbidden);
             threads::shared::share($useRedirectOnError);
             threads::shared::share($useSafeJail);
+            threads::shared::share($customFunctions);
+            threads::shared::share($securedCookie);
+            threads::shared::share($key);
+            threads::shared::share($headerList);
+            threads::shared::share($maintenance);
         };
+        print "eval error: $@" if ($@);
     }
     elsif ( MP() == 1 ) {
         require Apache;
@@ -240,14 +258,13 @@ sub regRemoteIp {
     return $str;
 }
 
-## @rmethod void lmSetHeaderIn(Apache2::RequestRec r, string h, string v)
-# Set an HTTP header in the HTTP request.
+## @rmethod void lmSetHeaderIn(Apache2::RequestRec r, hash headers)
+# Set HTTP headers in the HTTP request.
 # @param $r Current request
-# @param $h Name of the header
-# @param $v Value of the header
+# @param %headers Hash of header names and values
 sub lmSetHeaderIn {
-    my ( $class, $r, %hdr ) = splice @_;
-    while ( my ( $h, $v ) = each %hdr ) {
+    my ( $class, $r, %headers ) = splice @_;
+    while ( my ( $h, $v ) = each %headers ) {
         if ( MP() == 2 ) {
             $r->headers_in->set( $h => $v );
         }
@@ -255,6 +272,24 @@ sub lmSetHeaderIn {
             $r->header_in( $h => $v );
         }
         $class->lmLog( "Send header $h with value $v", 'debug' );
+    }
+}
+
+## @rmethod void lmUnsetHeaderIn(Apache2::RequestRec r, array headers)
+# Unset HTTP headers in the HTTP request.
+# @param $r Current request
+# @param @headers Name of the headers
+sub lmUnsetHeaderIn {
+    my ( $class, $r, @headers ) = splice @_;
+    foreach my $h (@headers) {
+        if ( MP() == 2 ) {
+            $r->headers_in->unset($h);
+        }
+        elsif ( MP() == 1 ) {
+            $r->header_in( $h => "" )
+              if ( $r->header_in($h) );
+        }
+        $class->lmLog( "Unset header $h", 'debug' );
     }
 }
 
@@ -500,49 +535,53 @@ sub purgeCache {
 
 ## @imethod void globalInit(hashRef args)
 # Global initialization process. Launch :
-# - locationRulesInit()
 # - defaultValuesInit()
 # - portalInit()
+# - locationRulesInit()
 # - globalStorageInit()
 # - forgeHeadersInit()
+# - postUrlInit()
 # @param $args reference to the configuration hash
 sub globalInit {
     my $class = shift;
+    $class->defaultValuesInit(@_);
     $class->portalInit(@_);
     $class->locationRulesInit(@_);
-    $class->defaultValuesInit(@_);
     $class->globalStorageInit(@_);
+    $class->headerListInit(@_);
     $class->forgeHeadersInit(@_);
     $class->postUrlInit(@_);
 }
 
 ## @imethod protected codeRef conditionSub(string cond)
 # Returns a compiled function used to grant users (used by
-# locationRulesInit(). The second value returned is a boolean that
-# tell if URL is protected.
+# locationRulesInit(). The second value returned is a non null
+# constant if URL is not protected (by "unprotect" or "skip"), 0 else.
 # @param $cond The boolean expression to use
-# @return array (ref(sub),boolean)
+# @return array (ref(sub), int)
 sub conditionSub {
     my ( $class, $cond ) = splice @_;
     my ( $OK, $NOK ) = ( sub { 1 }, sub { 0 } );
 
     # Simple cases : accept and deny
-    return ( $OK, 1 )
+    return ( $OK, 0 )
       if ( $cond =~ /^accept$/i );
-    return ( $NOK, 1 )
+    return ( $NOK, 0 )
       if ( $cond =~ /^deny$/i );
 
-    # Case unprotect : 2nd value is 0 since this URL is not protected
-    return ( $OK, 0 )
+    # Cases unprotect and skip : 2nd value is 1 or 2
+    return ( $OK, UNPROTECT )
       if ( $cond =~ /^unprotect$/i );
+    return ( $OK, SKIP )
+      if ( $cond =~ /^skip$/i );
 
     # Case logout
     if ( $cond =~ /^logout(?:_sso)?(?:\s+(.*))?$/i ) {
         my $url = $1;
         return (
             $url
-            ? ( sub { $datas->{_logout} = $url; return 0 }, 1 )
-            : ( sub { $datas->{_logout} = portal(); return 0 }, 1 )
+            ? ( sub { $datas->{_logout} = $url; return 0 }, 0 )
+            : ( sub { $datas->{_logout} = portal(); return 0 }, 0 )
         );
     }
 
@@ -552,7 +591,7 @@ sub conditionSub {
     if ( $cond =~ /^logout_app/i and MP() < 2 ) {
         $class->lmLog( "Rules logout_app and logout_app_sso require Apache>=2",
             'warn' );
-        return ( sub { 1 }, 1 );
+        return ( sub { 1 }, 0 );
     }
 
     # logout_app
@@ -568,7 +607,7 @@ sub conditionSub {
                 );
                 1;
             },
-            1
+            0
         );
     }
     elsif ( $cond =~ /^logout_app_sso(?:\s+(.*))?$/i ) {
@@ -589,7 +628,7 @@ sub conditionSub {
                 );
                 1;
             },
-            1
+            0
         );
     }
 
@@ -608,7 +647,7 @@ sub conditionSub {
     );
 
     # Return sub and protected flag
-    return ( $sub, 1 );
+    return ( $sub, 0 );
 }
 
 ## @imethod protected void defaultValuesInit(hashRef args)
@@ -620,12 +659,14 @@ sub defaultValuesInit {
     # Warning: first start of handler load values from MyHanlder.pm
     # and lemonldap-ng.ini
     # These values should be erased by global configuration!
-    $cookieName  = $args->{cookieName}  || $cookieName  || 'lemonldap';
+    $cookieName = $args->{cookieName} || $cookieName || 'lemonldap';
+    $securedCookie =
+        defined( $args->{securedCookie} ) ? $args->{securedCookie}
+      : defined($securedCookie)           ? $securedCookie
+      :                                     1;
     $whatToTrace = $args->{whatToTrace} || $whatToTrace || 'uid';
     $whatToTrace =~ s/\$//g;
     $https = defined($https) ? $https : $args->{https};
-    $args->{securedCookie} = 1 unless defined( $args->{securedCookie} );
-    $cookieName .= 'http' if ( $args->{securedCookie} == 2 and $https == 0 );
     $port ||= $args->{port};
     $customFunctions  = $args->{customFunctions};
     $cda              = defined($cda) ? $cda : $args->{cda};
@@ -644,6 +685,16 @@ sub defaultValuesInit {
       defined($useSafeJail)
       ? $useSafeJail
       : $args->{useSafeJail};
+    $key ||= 'lemonldap-ng-key';
+    $cipher ||= Lemonldap::NG::Common::Crypto->new($key);
+
+    if ( $args->{key} && ( $args->{key} ne $key ) ) {
+        $key    = $args->{key};
+        $cipher = Lemonldap::NG::Common::Crypto->new($key);
+    }
+
+    $maintenance = defined($maintenance) ? $maintenance : $args->{maintenance};
+
     1;
 }
 
@@ -707,7 +758,7 @@ sub updateStatus {
 }
 
 ## @rmethod protected int forbidden(string uri)
-# Used to reject non authorizated requests.
+# Used to reject non authorized requests.
 # Inform the status processus and call logForbidden().
 # @param uri URI requested
 # @return Apache2::Const::REDIRECT or Apache2::Const::FORBIDDEN
@@ -774,7 +825,7 @@ sub logGranted {
 # Hide Lemonldap::NG cookie to the protected application.
 sub hideCookie {
     my $class = shift;
-    $class->lmLog( "$class: removing cookie", 'debug' );
+    $class->lmLog( "removing cookie", 'debug' );
     my $tmp = lmHeaderIn( $apacheRequest, 'Cookie' );
     $tmp =~ s/$cookieName(?:http)?[^,;]*[,;]?//og;
     $class->lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
@@ -815,7 +866,53 @@ sub goToPortal {
 # @return Value of the cookie if found, 0 else
 sub fetchId {
     my $t = lmHeaderIn( $apacheRequest, 'Cookie' );
-    return ( $t =~ /$cookieName=([^,; ]+)/o ) ? $1 : 0;
+    my $lookForHttpCookie = $securedCookie =~ /^(2|3)$/ && $https->{_} == 0;
+    my $value =
+      $lookForHttpCookie
+      ? ( $t =~ /${cookieName}http=([^,; ]+)/o ? $1 : 0 )
+      : ( $t =~ /$cookieName=([^,; ]+)/o ? $1 : 0 );
+
+    $value = $cipher->decryptHex( $value, "http" )
+      if ( $value && $lookForHttpCookie && $securedCookie == 3 );
+    return $value;
+}
+
+## @rmethod protected boolean retrieveSession(id)
+# Tries to retrieve the session whose index is id
+# @return true if the session was found, false else
+sub retrieveSession {
+    my ( $class, $id ) = @_;
+
+    # 1. search if the user was the same as previous (very efficient in
+    #      persistent connection).
+    return 1
+      if ( $id eq $datas->{_session_id} and ( time() - $datasUpdate < 60 ) );
+
+    # 2. search in the local cache if exists
+    return 1
+      if ( $refLocalStorage and $datas = $refLocalStorage->get($id) );
+
+    # 3. search in the central cache
+    my %h;
+    eval { tie %h, $globalStorage, $id, $globalStorageOptions; };
+    if ($@) {
+        $class->lmLog( "Session $id can't be retrieved: $@", 'info' );
+        return 0;
+    }
+
+    # Update the session to notify activity, if necessary
+    $h{_lastSeen} = time() if ($timeoutActivity);
+
+    # Store data in current shared variables
+    $datas->{$_} = $h{$_} foreach ( keys %h );
+
+    # Store the session in local storage
+    $refLocalStorage->set( $id, $datas, "10 minutes" )
+      if ($refLocalStorage);
+
+    untie %h;
+    $datasUpdate = time();
+    return 1;
 }
 
 # MAIN SUBROUTINE called by Apache (using PerlHeaderParserHandler option)
@@ -824,6 +921,7 @@ sub fetchId {
 # Main method used to control access.
 # Calls :
 # - fetchId()
+# - retrieveSession()
 # - lmSetApacheUser()
 # - grant()
 # - forbidden() if user is rejected
@@ -837,6 +935,20 @@ sub run ($$) {
     ( $class, $apacheRequest ) = splice @_;
     return DECLINED unless ( $apacheRequest->is_initial_req );
     my $args = $apacheRequest->args;
+
+    # Direct return if maintenance mode is active
+    if ( $class->checkMaintenanceMode() ) {
+
+        if ($useRedirectOnError) {
+            $class->lmLog( "Got to portal with maintenance error code",
+                'debug' );
+            return $class->goToPortal( '/', 'lmError=' . MAINTENANCE_CODE );
+        }
+        else {
+            $class->lmLog( "Return maintenance error code", 'debug' );
+            return MAINTENANCE_CODE;
+        }
+    }
 
     # Cross domain authentication
     if ( $cda and $args =~ s/[\?&]?($cookieName=\w+)$//oi ) {
@@ -865,101 +977,93 @@ sub run ($$) {
     my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
     Apache2::URI::unescape_url($uri);
 
-    # AUTHENTICATION
-    # I - recover the cookie
-    my $id;
-    unless ( $id = $class->fetchId ) {
+    my $protection = $class->isUnprotected($uri);
 
-        # 1.1 Ignore unprotected URIs
-        unless ( $class->isProtected($uri) ) {
-            $class->updateStatus( $apacheRequest->connection->remote_ip,
-                $apacheRequest->uri, 'UNPROTECT' );
-            return OK;
+    if ( $protection == SKIP ) {
+        $class->lmLog( "Access control skipped", "debug" );
+        $class->updateStatus( $apacheRequest->connection->remote_ip,
+            $apacheRequest->uri, 'SKIP' );
+        $class->hideCookie;
+        $class->cleanHeaders;
+        return OK;
+    }
+
+    my $id;
+
+    # Try to recover cookie and user session
+    if ( $id = $class->fetchId and $class->retrieveSession($id) ) {
+
+        # AUTHENTICATION done
+
+        my $kc = keys %$datas;    # in order to detect new local macro
+
+        # ACCOUNTING (1. Inform Apache)
+        $class->lmSetApacheUser( $apacheRequest, $datas->{$whatToTrace} );
+
+        # AUTHORIZATION
+        return $class->forbidden($uri)
+          unless ( $class->grant($uri) );
+        $class->updateStatus( $datas->{$whatToTrace},
+            $apacheRequest->uri, 'OK' );
+
+        # ACCOUNTING (2. Inform remote application)
+        $class->sendHeaders;
+
+        # Store local macros
+        if ( keys %$datas > $kc and $refLocalStorage ) {
+            $class->lmLog( "Update local cache", "debug" );
+            $refLocalStorage->set( $id, $datas, "10 minutes" );
         }
 
-        # 1.2 Redirect users to the portal
-        $class->lmLog( "$class: No cookie found", 'info' );
+        # Hide Lemonldap::NG cookie
+        $class->hideCookie;
+
+        # Log
+        $apacheRequest->push_handlers( PerlLogHandler =>
+              sub { $class->logGranted( $uri, $datas ); DECLINED }, );
+
+        #  Catch POST rules
+        $class->transformUri($uri);
+
+        return OK;
+    }
+
+    elsif ( $protection == UNPROTECT ) {
+
+        # Ignore unprotected URIs
+        $class->lmLog( "No valid session but unprotected access", "debug" );
         $class->updateStatus( $apacheRequest->connection->remote_ip,
-            $apacheRequest->uri, 'REDIRECT' );
+            $apacheRequest->uri, 'UNPROTECT' );
+        $class->hideCookie;
+        $class->cleanHeaders;
+        return OK;
+    }
+
+    else {
+
+        # Redirect user to the portal
+        $class->lmLog( "$class: No cookie found", 'info' )
+          unless ($id);
+
+        # if the cookie was fetched, a log is sent by retrieveSession()
+        $class->updateStatus( $apacheRequest->connection->remote_ip,
+            $apacheRequest->uri, $id ? 'EXPIRED' : 'REDIRECT' );
         return $class->goToPortal($uri);
     }
+}
 
-    # II - recover the user datas
-    #  2.1 search if the user was the same as previous (very efficient in
-    #      persistent connection).
-    unless ( $id eq $datas->{_session_id} and ( time() - $datasUpdate < 60 ) ) {
+## @rmethod protected boolean checkMaintenanceMode
+# Check if we are in maintenance mode
+# @return true if maintenance mode
+sub checkMaintenanceMode {
+    my ($class) = splice @_;
 
-        # 2.2 search in the local cache if exists
-        unless ( $refLocalStorage and $datas = $refLocalStorage->get($id) ) {
-
-            # 2.3 search in the central cache
-            my %h;
-            eval { tie %h, $globalStorage, $id, $globalStorageOptions; };
-            if ($@) {
-
-                # The cookie isn't yet available
-                $class->lmLog( "The cookie $id isn't yet available: $@",
-                    'info' );
-                $class->updateStatus( $apacheRequest->connection->remote_ip,
-                    $apacheRequest->uri, 'EXPIRED' );
-
-                # For unprotected URI, user is not redirected
-                unless ( $class->isProtected($uri) ) {
-                    $class->updateStatus( $apacheRequest->connection->remote_ip,
-                        $apacheRequest->uri, 'UNPROTECT' );
-                    return OK;
-                }
-                return $class->goToPortal($uri);
-            }
-
-            # Update the session to notify activity, if necessary
-            $h{_lastSeen} = time() if ($timeoutActivity);
-
-            # Store data in current shared variables
-            $datas->{$_} = $h{$_} foreach ( keys %h );
-
-            # Store now the user in the local storage
-            if ($refLocalStorage) {
-                $refLocalStorage->set( $id, $datas, "10 minutes" );
-            }
-            untie %h;
-            $datasUpdate = time();
-        }
+    if ($maintenance) {
+        $class->lmLog( "Maintenance mode activated", 'debug' );
+        return 1;
     }
 
-    # ACCOUNTING
-    # 1 - Inform Apache
-    $class->lmSetApacheUser( $apacheRequest, $datas->{$whatToTrace} );
-
-    # AUTHORIZATION
-    my $kc = keys %$datas;
-    return $class->forbidden($uri) unless ( $class->grant($uri) );
-    $class->updateStatus( $datas->{$whatToTrace}, $apacheRequest->uri, 'OK' );
-
-    # Store local macros
-    if ( keys %$datas > $kc and $refLocalStorage ) {
-        $class->lmLog( "Update local cache", "debug" );
-        $refLocalStorage->set( $id, $datas, "10 minutes" );
-    }
-
-    # ACCOUNTING
-    # 2 - Inform remote application
-    $class->sendHeaders;
-
-    # SECURITY
-    # Hide Lemonldap::NG cookie
-    $class->hideCookie;
-
-    # Log
-    $apacheRequest->push_handlers(
-        PerlLogHandler => sub { $class->logGranted( $uri, $datas ); DECLINED },
-    );
-
-    #  Catch POST rules
-    $class->transformUri($uri);
-
-    # Return OK
-    OK;
+    return 0;
 }
 
 1;
@@ -1291,6 +1395,19 @@ sub forgeHeadersInit {
     1;
 }
 
+## @imethod protected void headerListInit(hashRef args)
+# Lists the exported HTTP headers into $headerList
+# @param $args reference to the configuration hash
+sub headerListInit {
+    my ( $class, $args ) = splice @_;
+
+    if ( $args->{exportedHeaders} ) {
+        my @tmp = keys %{ $args->{exportedHeaders} };
+        $headerList = \@tmp;
+    }
+    1;
+}
+
 ## @imethod protected buildPostForm(string url, int count)
 # Build form that will be posted by client
 # Fill an input hidden with fake value to
@@ -1325,9 +1442,19 @@ sub sendHeaders {
     $class->lmSetHeaderIn( $apacheRequest, &$forgeHeaders );
 }
 
-## @rmethod protected boolean isProtected()
-# @return True if URI isn't protected (rule "unprotect")
-sub isProtected {
+## @rmethod protected void cleanHeaders()
+# Clean HTTP headers to prevent user to send custom headers
+# that would not be caught if access rule is unprotect or skip
+sub cleanHeaders {
+    my ($class) = splice @_;
+    $class->lmUnsetHeaderIn( $apacheRequest, @{$headerList} );
+}
+
+## @rmethod protected int isUnprotected()
+# @return 0 if URI is protected,
+# UNPROTECT if it is unprotected by "unprotect",
+# SKIP if it is unprotected by "skip"
+sub isUnprotected {
     my ( $class, $uri ) = splice @_;
     for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
         return $locationProtection->[$i]
