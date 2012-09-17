@@ -4,12 +4,12 @@
 package Lemonldap::NG::Handler::Status;
 
 use strict;
-use POSIX;
+use POSIX qw(setuid setgid);
 use Data::Dumper;
 
 #inherits Cache::Cache
 
-our $VERSION = '1.2.0';
+our $VERSION = '1.2.2';
 
 our $status   = {};
 our $activity = [];
@@ -97,8 +97,8 @@ sub portalTab {
 }
 
 eval {
-    POSIX::setgid( ( getgrnam( $ENV{APACHE_RUN_GROUP} ) )[2] );
-    POSIX::setuid( ( getpwnam( $ENV{APACHE_RUN_USER} ) )[2] );
+    setgid( ( getgrnam( $ENV{APACHE_RUN_GROUP} ) )[2] );
+    setuid( ( getpwnam( $ENV{APACHE_RUN_USER} ) )[2] );
 };
 
 ## @rfn void run(string localStorage, hashRef localStorageOptions)

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Lemonldap-NG-Handler
-version:            1.2.1
+version:            1.2.2
 abstract:           The Apache protection module part of
 author:
     - Xavier Guimard <x.guimard@free.fr>
@@ -16,8 +16,9 @@ requires:
     Apache::Session::Generate::MD5:  0
     Cache::Cache:         0
     CGI:                  3.08
-    Lemonldap::NG::Common:  1.2.1
+    Lemonldap::NG::Common:  1.2.2
     LWP::UserAgent:       0
+    Test::Pod:            0
     URI:                  0
 no_index:
     directory:

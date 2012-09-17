@@ -32,7 +32,7 @@ use constant MAINTENANCE_CODE => 503;
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.2.0';
+our $VERSION = '1.2.2';
 
 our %EXPORT_TAGS;
 
@@ -951,13 +951,13 @@ sub run ($$) {
     }
 
     # Cross domain authentication
-    if ( $cda and $args =~ s/[\?&]?($cookieName=\w+)$//oi ) {
+    if ( $cda and $args =~ s/[\?&]?($cookieName(http)?=\w+)$//oi ) {
         my $str = $1;
         $class->lmLog( 'CDA request', 'debug' );
         $apacheRequest->args($args);
         my $host          = $apacheRequest->get_server_name();
         my $redirectUrl   = $class->_buildUrl( $apacheRequest->uri );
-        my $redirectHttps = ( $redirectUrl =~ m/^ĥttps/ );
+        my $redirectHttps = ( $redirectUrl =~ m/^https/ );
         lmSetErrHeaderOut( $apacheRequest,
             'Location' => $redirectUrl . ( $args ? "?" . $args : "" ) );
         $host =~ s/^[^\.]+\.(.*\..*$)/$1/;

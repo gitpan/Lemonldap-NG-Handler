@@ -2,6 +2,7 @@ Changes
 example/autoProtectedCGI.pl
 example/menu.pl
 example/MyHandler.pm
+example/MyHandlerAuthBasic.pm
 example/MyHandlerLog4Perl.pm
 example/MyHandlerSecureToken.pm
 example/MyHandlerSympa.pm
@@ -39,4 +40,5 @@ t/30-Lemonldap-NG-Handler-CGI.t
 t/40-Lemonldap-NG-Handler-Proxy.t
 t/50-Lemonldap-NG-Handler-SecureToken.t
 t/51-Lemonldap-NG-Handler-Zimbra.t
+t/52-Lemonldap-NG-Handler-AuthBasic.t
 t/99-pod.t
