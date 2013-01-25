@@ -16,7 +16,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 use utf8;
 no utf8;
 
-our $VERSION = '1.2.2';
+our $VERSION = '1.2.2_01';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -65,14 +65,23 @@ sub run ($$) {
     # II - recover the user datas
     #  2.1 search if the user was the same as previous (very efficient in
     #      persistent connection).
-    unless ( $id eq $datas->{_session_id} ) {
+    unless ( $id eq $datas->{_cache_id} ) {
 
         # 2.2 search in the local cache if exists
         unless ( $refLocalStorage and $datas = $refLocalStorage->get($id) ) {
 
             # 2.3 Authentication by Lemonldap::NG::Portal using SOAP request
+
+            # Add client IP as X-Forwarded-For IP in SOAP request
+            my $xheader = lmHeaderIn( $apacheRequest, 'X-Forwarded-For' );
+            $xheader .= ", " if ($xheader);
+            $xheader .= $apacheRequest->connection->remote_ip;
+            my $soapHeaders =
+              HTTP::Headers->new( "X-Forwarded-For" => $xheader );
+
             my $soap =
-              SOAP::Lite->proxy( $class->portal() )
+              SOAP::Lite->proxy( $class->portal(),
+                default_headers => $soapHeaders )
               ->uri('urn:Lemonldap::NG::Common::CGI::SOAPService');
             $user = decode_base64($user);
             ( $user, $pass ) = ( $user =~ /^(.*?):(.*)$/ );
@@ -116,6 +125,7 @@ sub run ($$) {
                 return $class->goToPortal($uri);
             }
             $datas->{$_} = $h{$_} foreach ( keys %h );
+            $datas->{_cache_id} = $id;
 
             # Store now the user in the local storage
             if ($refLocalStorage) {
@@ -134,16 +144,16 @@ sub run ($$) {
     $class->updateStatus( $datas->{$whatToTrace}, $apacheRequest->uri, 'OK' );
     $class->logGranted( $uri, $datas );
 
-    # ACCOUNTING
-    # 2 - Inform remote application
-    $class->sendHeaders;
-
     # SECURITY
     # Hide Lemonldap::NG cookie
     $class->hideCookie;
 
     # Hide user password
-    $class->lmSetHeaderIn( $apacheRequest, Authorization => '' );
+    $class->lmUnsetHeaderIn( $apacheRequest, "Authorization");
+
+    # ACCOUNTING
+    # 2 - Inform remote application
+    $class->sendHeaders;
     OK;
 }
 

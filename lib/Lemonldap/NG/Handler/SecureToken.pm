@@ -13,7 +13,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 use Cache::Memcached;
 use Apache::Session::Generate::MD5;
 
-our $VERSION = '1.1.2';
+our $VERSION = '1.2.2_01';
 
 # Shared variables
 our (

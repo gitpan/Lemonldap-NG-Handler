@@ -17,7 +17,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 
 #link Lemonldap::NG::Handler::_CGI protected _handler
 
-our $VERSION = '1.0.2';
+our $VERSION = '1.2.2_01';
 
 ## @cmethod Lemonldap::NG::Handler::CGI new(hashRef args)
 # Constructor.
@@ -50,7 +50,7 @@ sub new {
     }
 
     # Protection
-    if ( $self->{protection} ) {
+    if ( $self->{protection} and $self->{protection} ne 'none' ) {
         $self->authenticate();
 
         # ACCOUNTING

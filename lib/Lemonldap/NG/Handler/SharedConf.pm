@@ -27,7 +27,7 @@ use base qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
 
 #parameter reloadTime Time in second between 2 configuration check (600)
 
-our $VERSION    = '1.1.1';
+our $VERSION = '1.2.2_01';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -134,7 +134,7 @@ sub run($$) {
 # Test if configuration has changed and launch setConf() if needed.
 # If the optional boolean $local is true, remote configuration is not tested:
 # only local cached configuration is tested if available. $local is given to
-# Lemonldap::NG::Conf::getConf()
+# Lemonldap::NG::Common::getConf()
 # @param $local boolean
 # @return Apache constant
 sub testConf {

@@ -32,7 +32,7 @@ use constant MAINTENANCE_CODE => 503;
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.2.2';
+our $VERSION = '1.2.2_01';
 
 our %EXPORT_TAGS;
 
@@ -457,7 +457,6 @@ sub localInit($$) {
     my ( $class, $args ) = splice @_;
     if ( $localStorage = $args->{localStorage} ) {
         $localStorageOptions = $args->{localStorageOptions};
-        $localStorageOptions->{namespace}          ||= "lemonldap";
         $localStorageOptions->{default_expires_in} ||= 600;
         $class->purgeCache();
     }
@@ -827,8 +826,13 @@ sub hideCookie {
     my $class = shift;
     $class->lmLog( "removing cookie", 'debug' );
     my $tmp = lmHeaderIn( $apacheRequest, 'Cookie' );
-    $tmp =~ s/$cookieName(?:http)?[^,;]*[,;]?//og;
-    $class->lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
+    $tmp =~ s/$cookieName(http)?=[^,;]*[,;\s]*//og;
+    if ($tmp) {
+        $class->lmSetHeaderIn( $apacheRequest, 'Cookie' => $tmp );
+    }
+    else {
+        $class->lmUnsetHeaderIn( $apacheRequest, 'Cookie' );
+    }
 }
 
 ## @rmethod protected string encodeUrl(string url)
@@ -902,6 +906,9 @@ sub retrieveSession {
 
     # Update the session to notify activity, if necessary
     $h{_lastSeen} = time() if ($timeoutActivity);
+
+    # Set _session_id key
+    $h{_session_id} = $id;
 
     # Store data in current shared variables
     $datas->{$_} = $h{$_} foreach ( keys %h );
@@ -1425,7 +1432,7 @@ sub buildPostForm {
             my $r = shift;
             $r->content_type('text/html; charset=UTF-8');
             $r->print(
-qq{<html><body onload="document.getElementById('f').submit()"><form id="f" method="post" action="$url"><input type=hidden name="a" value="}
+qq{<html><body onload="document.getElementById('f').submit()"><form id="f" method="post" action="$url" style="visibility:hidden"><input type=hidden name="a" value="}
                   . sprintf( "%0" . $count . "d", 1 )
                   . qq{"/><input type="submit" value="Ok"/></form></body></html>}
             );
@@ -1497,8 +1504,7 @@ sub postUrlInit {
         $d->{postUrl} ||= $url;
 
         # Register POST form for POST URL
-        $transform->{ $d->{postUrl} } =
-          sub { $class->buildPostForm( $d->{postUrl} ) }
+        $transform->{$url} = sub { $class->buildPostForm( $d->{postUrl} ) }
           if ( $url ne $d->{postUrl} );
 
         # Get datas to POST
@@ -1524,8 +1530,8 @@ sub postUrlInit {
         }
 
         $class->lmLog( "Compiling POST request for $url", 'debug' );
-        $transform->{$url} = sub {
-            return $class->buildPostForm($url)
+        $transform->{ $d->{postUrl} } = sub {
+            return $class->buildPostForm( $d->{postUrl} )
               if ( $apacheRequest->method ne 'POST' );
             $apacheRequest->add_input_filter(
                 sub {
@@ -1550,15 +1556,25 @@ sub postFilter {
 
     unless ( $f->ctx ) {
         $f->ctx(1);
+
+        # Create the transformed form data
         my $u = URI->new('http:');
         $u->query_form( { $class->safe->reval($data) } );
         my $s = $u->query();
+
+        # Eat all fake data sent by client
         $l = $f->r->headers_in->{'Content-Length'};
+        while ( $f->read( my $b, $l ) ) { }
+
+        # Send to application real data
         $f->r->headers_in->set( 'Content-Length' => length($s) );
         $f->r->headers_in->set(
             'Content-Type' => 'application/x-www-form-urlencoded' );
         $f->print($s);
-        while ( $f->read( my $b, $l ) ) { }
+
+        $class->lmLog( "Send POST data $s", 'debug' );
+
+        # Mark this filter as done
         $f->seen_eos(1);
     }
     return OK;

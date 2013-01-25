@@ -4,22 +4,33 @@ use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
-    NAME         => 'Lemonldap::NG::Handler',
-    VERSION_FROM => 'lib/Lemonldap/NG/Handler.pm',
-    LICENSE      => 'perl',
-    PMLIBDIRS    => ['lib'],
-    META_MERGE   => { 'recommends' => { 'SOAP::Lite' => 0, }, },
-    BUILD_REQUIRES =>
-      { 'IO::Pipe' => 0, 'Test::MockObject' => 0 },
+    NAME           => 'Lemonldap::NG::Handler',
+    VERSION_FROM   => 'lib/Lemonldap/NG/Handler.pm',
+    LICENSE        => 'perl',
+    PMLIBDIRS      => ['lib'],
+    BUILD_REQUIRES => {
+        'Cache::Memcached'  => 0,
+        'Digest::HMAC_SHA1' => 0,
+        'HTTP::Message'     => 0,
+        'IO::Pipe'          => 0,
+        'SOAP::Lite'                     => 0,
+        'Test::MockObject'  => 0,
+        'Test::Pod'         => 0,
+    },
+    META_MERGE => {
+        'recommends' => {
+            'Cache::Memcached'  => 0,
+            'Digest::HMAC_SHA1' => 0,
+            'HTTP::Message'     => 0,
+        'SOAP::Lite'                     => 0,
+        },
+    },
     PREREQ_PM => {
-        'Apache::Session'                => 0,
-        'LWP::UserAgent'                 => 0,
-        'Cache::Cache'                   => 0,
-        'Lemonldap::NG::Common'          => '1.2.2',
-	'Test::Pod'			 => 0,
-        'CGI'                            => 3.08,
-        'URI'                            => 0,
         'Apache::Session::Generate::MD5' => 0,
+        'CGI'                            => 3.08,
+        'Lemonldap::NG::Common'          => '1.3.0',
+        'LWP'                            => 0,
+        'URI'                            => 0,
     },    # e.g., Module::Name => 1.1
     (
         $] >= 5.005

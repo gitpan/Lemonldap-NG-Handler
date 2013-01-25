@@ -13,7 +13,7 @@ use Lemonldap::NG::Handler::Simple qw(:locationRules :headers :post :apache)
 use MIME::Base64;
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
-our $VERSION = '1.1.2';
+our $VERSION = '1.2.2_01';
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables
@@ -254,7 +254,7 @@ sub postUrlInit {
             $d->{postUrl} ||= $url;
 
             # Register POST form for POST URL
-            $transform->{$vhost}->{ $d->{postUrl} } =
+            $transform->{$vhost}->{$url} =
               sub { $class->buildPostForm( $d->{postUrl} ) }
               if ( $url ne $d->{postUrl} );
 
@@ -283,8 +283,8 @@ sub postUrlInit {
 
             $class->lmLog( "Compiling POST request for $url (vhost $vhost)",
                 'debug' );
-            $transform->{$vhost}->{$url} = sub {
-                return $class->buildPostForm($url)
+            $transform->{$vhost}->{ $d->{postUrl} } = sub {
+                return $class->buildPostForm( $d->{postUrl} )
                   if ( $apacheRequest->method ne 'POST' );
                 $apacheRequest->add_input_filter(
                     sub {
