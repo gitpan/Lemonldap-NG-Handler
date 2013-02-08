@@ -18,7 +18,7 @@ ok(
     $h->localInit(
         {
             localStorage        => 'Cache::FileCache',
-            localStorageOptions => { 'namespace' => 'lemonldap-ng-sessions', },
+            localStorageOptions => { 'namespace' => 'lemonldap-ng', },
         }
     ),
     'localInit'

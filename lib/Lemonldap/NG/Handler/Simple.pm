@@ -32,7 +32,7 @@ use constant MAINTENANCE_CODE => 503;
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.2.2_01';
+our $VERSION = '1.2.3';
 
 our %EXPORT_TAGS;
 
@@ -457,6 +457,7 @@ sub localInit($$) {
     my ( $class, $args ) = splice @_;
     if ( $localStorage = $args->{localStorage} ) {
         $localStorageOptions = $args->{localStorageOptions};
+        $localStorageOptions->{namespace}          ||= "lemonldap";
         $localStorageOptions->{default_expires_in} ||= 600;
         $class->purgeCache();
     }
@@ -962,15 +963,13 @@ sub run ($$) {
         my $str = $1;
         $class->lmLog( 'CDA request', 'debug' );
         $apacheRequest->args($args);
-        my $host          = $apacheRequest->get_server_name();
         my $redirectUrl   = $class->_buildUrl( $apacheRequest->uri );
         my $redirectHttps = ( $redirectUrl =~ m/^https/ );
         lmSetErrHeaderOut( $apacheRequest,
             'Location' => $redirectUrl . ( $args ? "?" . $args : "" ) );
-        $host =~ s/^[^\.]+\.(.*\..*$)/$1/;
         lmSetErrHeaderOut(
             $apacheRequest,
-            'Set-Cookie' => "$str; domain=$host; path=/"
+            'Set-Cookie' => "$str; path=/"
               . ( $redirectHttps ? "; secure"   : "" )
               . ( $httpOnly      ? "; HttpOnly" : "" )
               . (
@@ -1261,7 +1260,17 @@ L<http://lemonldap-ng.org/>
 
 =head1 AUTHOR
 
-Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+=over
+
+=item Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
+
+=item François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+
+=item Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=item Thomas Chemineau, E<lt>thomas.chemineau@gmail.comE<gt>
+
+=back
 
 =head1 BUG REPORT
 
@@ -1275,11 +1284,30 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005, 2007, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+=over
+
+=item Copyright (C) 2006, 2007, 2008, 2009, 2010 by Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=item Copyright (C) 2012, 2013 by François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+
+=item Copyright (C) 2006, 2009, 2010, 2011, 2012, 2013 by Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
+
+=item Copyright (C) 2010 by Thomas Chemineau, E<lt>thomas.chemineau@gmail.comE<gt>
+
+=back
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.10.0 or,
-at your option, any later version of Perl 5 you may have available.
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see L<http://www.gnu.org/licenses/>.
 
 =cut
 ## @rmethod int abort(string mess)

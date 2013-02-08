@@ -10,13 +10,14 @@ use strict;
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 use Digest::MD5 qw(md5_base64);
 use MIME::Base64;
+use HTTP::Headers;
 use SOAP::Lite;    # link protected portalRequest
 
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use utf8;
 no utf8;
 
-our $VERSION = '1.2.2_01';
+our $VERSION = '1.2.3';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -211,7 +212,15 @@ L<http://lemonldap-ng.org/>
 
 =head1 AUTHOR
 
-Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+=over
+
+=item Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
+
+=item François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+
+=item Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=back
 
 =head1 BUG REPORT
 
@@ -225,10 +234,27 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2008, 2010 by Xavier Guimard E<lt>x.guimard@free.frE<gt>
+=over
+
+=item Copyright (C) 2008, 2009, 2010 by Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=item Copyright (C) 2012, 2013 by François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+
+=item Copyright (C) 2010, 2011, 2012 by Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
+
+=back
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.10.0 or,
-at your option, any later version of Perl 5 you may have available.
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see L<http://www.gnu.org/licenses/>.
 
 =cut

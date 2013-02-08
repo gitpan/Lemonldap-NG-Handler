@@ -12,7 +12,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::HMAC_SHA1 qw(hmac_sha1 hmac_sha1_hex);
 
-our $VERSION = '1.2.2_01';
+our $VERSION = '1.0.0';
 
 # Shared variables
 our ( $zimbraPreAuthKey, $zimbraAccountKey, $zimbraBy, $zimbraUrl,
@@ -182,14 +182,45 @@ L<Lemonldap::NG::Handler>
 
 =head1 AUTHOR
 
-Clement Oudot, E<lt>clement@oodo.netE<gt>
+=over
+
+=item Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
+
+=item Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=back
+
+=head1 BUG REPORT
+
+Use OW2 system to report bug or ask for features:
+L<http://jira.ow2.org>
+
+=head1 DOWNLOAD
+
+Lemonldap::NG is available at
+L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2010 by Clement Oudot
+=over
+
+=item Copyright (C) 2010 by Xavier Guimard, E<lt>x.guimard@free.frE<gt>
+
+=item Copyright (C) 2010, 2012 by Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
+
+=back
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.10.0 or,
-at your option, any later version of Perl 5 you may have available.
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see L<http://www.gnu.org/licenses/>.
 
 =cut
