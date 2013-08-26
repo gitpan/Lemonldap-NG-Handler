@@ -150,7 +150,7 @@ sub run ($$) {
     $class->hideCookie;
 
     # Hide user password
-    $class->lmUnsetHeaderIn( $apacheRequest, "Authorization");
+    $class->lmUnsetHeaderIn( $apacheRequest, "Authorization" );
 
     # ACCOUNTING
     # 2 - Inform remote application

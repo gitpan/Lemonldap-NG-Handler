@@ -963,7 +963,7 @@ sub run ($$) {
         my $str = $1;
         $class->lmLog( 'CDA request', 'debug' );
         $apacheRequest->args($args);
-        my $redirectUrl   = $class->_buildUrl( $apacheRequest->uri );
+        my $redirectUrl = $class->_buildUrl( $apacheRequest->uri );
         my $redirectHttps = ( $redirectUrl =~ m/^https/ );
         lmSetErrHeaderOut( $apacheRequest,
             'Location' => $redirectUrl . ( $args ? "?" . $args : "" ) );
