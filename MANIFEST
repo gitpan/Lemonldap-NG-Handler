@@ -42,3 +42,4 @@ t/50-Lemonldap-NG-Handler-SecureToken.t
 t/51-Lemonldap-NG-Handler-Zimbra.t
 t/52-Lemonldap-NG-Handler-AuthBasic.t
 t/99-pod.t
+META.json                                Module JSON meta-data (added by MakeMaker)

@@ -9,7 +9,6 @@ WriteMakefile(
     LICENSE        => 'gpl',
     PMLIBDIRS      => ['lib'],
     BUILD_REQUIRES => {
-        'Cache::Memcached'  => 0,
         'Digest::HMAC_SHA1' => 0,
         'HTTP::Message'     => 0,
         'IO::Pipe'          => 0,
@@ -29,7 +28,7 @@ WriteMakefile(
     PREREQ_PM => {
         'Apache::Session::Generate::MD5' => 0,
         'CGI'                            => 3.08,
-        'Lemonldap::NG::Common'          => '1.2.4',
+        'Lemonldap::NG::Common'          => '1.3.0',
         'LWP'                            => 0,
         'URI'                            => 0,
     },    # e.g., Module::Name => 1.1

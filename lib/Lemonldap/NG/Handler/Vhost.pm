@@ -13,7 +13,7 @@ use Lemonldap::NG::Handler::Simple qw(:locationRules :headers :post :apache)
 use MIME::Base64;
 use constant SAFEWRAP => ( Safe->can("wrap_code_ref") ? 1 : 0 );
 
-our $VERSION = '1.2.3';
+our $VERSION = '1.3.0';
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Set default values for non-customized variables
@@ -32,10 +32,14 @@ sub defaultValuesInit {
         if ( defined $args->{vhostOptions} ) {
             my $n = 'vhost' . ucfirst($t);
             foreach my $k ( keys %{ $args->{vhostOptions} } ) {
-                my $v = $args->{vhostOptions}->{$k}->{$n};
-                $class->lmLog( "Options $t for vhost $k: $v", 'debug' );
-                $args->{$t}->{$k} = $v
-                  if ( $v >= 0 );    # Keep default value if $v is negative
+                foreach my $alias (
+                    @{ $class->getAliases( $k, $args->{vhostOptions} ) } )
+                {
+                    my $v = $args->{vhostOptions}->{$k}->{$n};
+                    $class->lmLog( "Options $t for vhost $alias: $v", 'debug' );
+                    $args->{$t}->{$alias} = $v
+                      if ( $v >= 0 );    # Keep default value if $v is negative
+                }
             }
         }
     }
@@ -57,31 +61,45 @@ sub defaultValuesInit {
 sub locationRulesInit {
     my ( $class, $args ) = splice @_;
     foreach my $vhost ( keys %{ $args->{locationRules} } ) {
-        $locationCount->{$vhost} = 0;
-        foreach ( sort keys %{ $args->{locationRules}->{$vhost} } ) {
-            if ( $_ eq 'default' ) {
-                ( $defaultCondition->{$vhost}, $defaultProtection->{$vhost} ) =
-                  $class->conditionSub(
-                    $args->{locationRules}->{$vhost}->{$_} );
+        foreach
+          my $alias ( @{ $class->getAliases( $vhost, $args->{vhostOptions} ) } )
+        {
+            $locationCount->{$alias} = 0;
+            foreach ( sort keys %{ $args->{locationRules}->{$vhost} } ) {
+                if ( $_ eq 'default' ) {
+                    (
+                        $defaultCondition->{$alias},
+                        $defaultProtection->{$alias}
+                      )
+                      = $class->conditionSub(
+                        $args->{locationRules}->{$vhost}->{$_} );
+                }
+                else {
+                    (
+                        $locationCondition->{$alias}
+                          ->[ $locationCount->{$alias} ],
+                        $locationProtection->{$alias}
+                          ->[ $locationCount->{$alias} ]
+                      )
+                      = $class->conditionSub(
+                        $args->{locationRules}->{$vhost}->{$_} );
+                    $locationRegexp->{$alias}->[ $locationCount->{$alias} ] =
+                      qr/$_/;
+                    $locationConditionText->{$alias}
+                      ->[ $locationCount->{$alias} ] =
+                      /^\(\?#(.*?)\)/ ? $1 : /^(.*?)##(.+)$/ ? $2 : $_;
+                    $locationCount->{$alias}++;
+                }
             }
-            else {
-                (
-                    $locationCondition->{$vhost}->[ $locationCount->{$vhost} ],
-                    $locationProtection->{$vhost}->[ $locationCount->{$vhost} ]
-                  )
-                  = $class->conditionSub(
-                    $args->{locationRules}->{$vhost}->{$_} );
-                $locationRegexp->{$vhost}->[ $locationCount->{$vhost} ] =
-                  qr/$_/;
-                $locationCount->{$vhost}++;
-            }
+
+            # Default police
+            ( $defaultCondition->{$alias}, $defaultProtection->{$alias} ) =
+              $class->conditionSub('accept')
+              unless ( $defaultCondition->{$alias} );
         }
 
-        # Default police
-        ( $defaultCondition->{$vhost}, $defaultProtection->{$vhost} ) =
-          $class->conditionSub('accept')
-          unless ( $defaultCondition->{$vhost} );
     }
+
     1;
 }
 
@@ -94,26 +112,34 @@ sub forgeHeadersInit {
 
     # Creation of the subroutine who will generate headers
     foreach my $vhost ( keys %{ $args->{exportedHeaders} } ) {
-        my %tmp = %{ $args->{exportedHeaders}->{$vhost} };
-        foreach ( keys %tmp ) {
-            $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-            $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
+        foreach
+          my $alias ( @{ $class->getAliases( $vhost, $args->{vhostOptions} ) } )
+        {
+            my %tmp = %{ $args->{exportedHeaders}->{$vhost} };
+            foreach ( keys %tmp ) {
+                $tmp{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
+                $tmp{$_} = $class->regRemoteIp( $tmp{$_} );
+            }
+
+            my $sub;
+            foreach ( keys %tmp ) {
+                $sub .= "'$_' => join('',split(/[\\r\\n]+/,$tmp{$_})),";
+            }
+
+            $forgeHeaders->{$alias} = (
+                SAFEWRAP
+                ? $class->safe->wrap_code_ref(
+                    $class->safe->reval("sub {$sub}")
+                  )
+                : $class->safe->reval("sub {return($sub)}")
+            );
+            $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}",
+                'error' )
+              if ($@);
         }
 
-        my $sub;
-        foreach ( keys %tmp ) {
-            $sub .= "'$_' => join('',split(/[\\r\\n]+/,$tmp{$_})),";
-        }
-
-        $forgeHeaders->{$vhost} = (
-            SAFEWRAP
-            ? $class->safe->wrap_code_ref( $class->safe->reval("sub {$sub}") )
-            : $class->safe->reval("sub {return($sub)}")
-        );
-        $class->lmLog( "$class: Unable to forge headers: $@: sub {$sub}",
-            'error' )
-          if ($@);
     }
+
     1;
 }
 
@@ -124,8 +150,12 @@ sub headerListInit {
     my ( $class, $args ) = splice @_;
 
     foreach my $vhost ( keys %{ $args->{exportedHeaders} } ) {
-        my @tmp = keys %{ $args->{exportedHeaders}->{$vhost} };
-        $headerList->{$vhost} = \@tmp;
+        foreach
+          my $alias ( @{ $class->getAliases( $vhost, $args->{vhostOptions} ) } )
+        {
+            my @tmp = keys %{ $args->{exportedHeaders}->{$vhost} };
+            $headerList->{$alias} = \@tmp;
+        }
     }
     1;
 }
@@ -173,6 +203,10 @@ sub grant {
     my $vhost = $apacheRequest->hostname;
     for ( my $i = 0 ; $i < $locationCount->{$vhost} ; $i++ ) {
         if ( $uri =~ $locationRegexp->{$vhost}->[$i] ) {
+            $class->lmLog(
+                'Regexp "' . $locationConditionText->{$vhost}->[$i] . '" match',
+                'debug'
+            );
             return &{ $locationCondition->{$vhost}->[$i] }($datas);
         }
     }
@@ -183,6 +217,7 @@ sub grant {
         );
         return 0;
     }
+    $class->lmLog( "$vhost: Apply default rule", 'debug' );
     return &{ $defaultCondition->{$vhost} }($datas);
 }
 
@@ -193,7 +228,11 @@ sub fetchId {
     my $t                 = lmHeaderIn( $apacheRequest, 'Cookie' );
     my $vhost             = $apacheRequest->hostname;
     my $lookForHttpCookie = $securedCookie =~ /^(2|3)$/
-      && !( defined( $https->{$vhost} ) ? $https->{$vhost} : $https->{_} );
+      && !(
+        defined( $https->{$vhost} )
+        ? $https->{$vhost}
+        : $https->{_}
+      );
     my $value =
       $lookForHttpCookie
       ? ( $t =~ /${cookieName}http=([^,; ]+)/o ? $1 : 0 )
@@ -215,8 +254,11 @@ sub _buildUrl {
          $port->{$vhost}
       || $port->{_}
       || $apacheRequest->get_server_port();
-    my $_https =
-      ( defined( $https->{$vhost} ) ? $https->{$vhost} : $https->{_} );
+    my $_https = (
+        defined( $https->{$vhost} )
+        ? $https->{$vhost}
+        : $https->{_}
+    );
     $portString =
         ( $_https  && $portString == 443 ) ? ''
       : ( !$_https && $portString == 80 )  ? ''
@@ -247,56 +289,60 @@ sub postUrlInit {
     # Browse all vhost
     foreach my $vhost ( keys %{ $args->{post} } ) {
 
-        # Browse all POST URI
-        while ( my ( $url, $d ) = each( %{ $args->{post}->{$vhost} } ) ) {
+        foreach
+          my $alias ( @{ $class->getAliases( $vhost, $args->{vhostOptions} ) } )
+        {
 
-            # Where to POST
-            $d->{postUrl} ||= $url;
+            # Browse all POST URI
+            while ( my ( $url, $d ) = each( %{ $args->{post}->{$vhost} } ) ) {
 
-            # Register POST form for POST URL
-            $transform->{$vhost}->{$url} =
-              sub { $class->buildPostForm( $d->{postUrl} ) }
-              if ( $url ne $d->{postUrl} );
+                # Where to POST
+                $d->{postUrl} ||= $url;
 
-            # Get datas to POST
-            my $expr = $d->{expr};
-            my %postdata;
+                # Register POST form for POST URL
+                $transform->{$alias}->{$url} =
+                  sub { $class->buildPostForm( $d->{postUrl} ) }
+                  if ( $url ne $d->{postUrl} );
 
-            # Manage old and new configuration format
-            # OLD: expr => 'param1 => value1, param2 => value2',
-            # NEW : expr => { param1 => value1, param2 => value2 },
-            if ( ref $expr eq 'HASH' ) {
-                %postdata = %$expr;
+                # Get datas to POST
+                my $expr = $d->{expr};
+                my %postdata;
+
+                # Manage old and new configuration format
+                # OLD: expr => 'param1 => value1, param2 => value2',
+                # NEW : expr => { param1 => value1, param2 => value2 },
+                if ( ref $expr eq 'HASH' ) {
+                    %postdata = %$expr;
+                }
+                else {
+                    %postdata = split /(?:\s*=>\s*|\s*,\s*)/, $expr;
+                }
+
+                # Build string for URI::query_form
+                my $tmp;
+                foreach ( keys %postdata ) {
+                    $postdata{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
+                    $postdata{$_} = "'$postdata{$_}'"
+                      if ( $postdata{$_} =~ /^\w+$/ );
+                    $tmp .= "'$_'=>$postdata{$_},";
+                }
+
+                $class->lmLog( "Compiling POST request for $url (vhost $alias)",
+                    'debug' );
+                $transform->{$alias}->{ $d->{postUrl} } = sub {
+                    return $class->buildPostForm( $d->{postUrl} )
+                      if ( $apacheRequest->method ne 'POST' );
+                    $apacheRequest->add_input_filter(
+                        sub {
+                            $class->postFilter( $tmp, @_ );
+                        }
+                    );
+                    OK;
+                  }
             }
-            else {
-                %postdata = split /(?:\s*=>\s*|\s*,\s*)/, $expr;
-            }
 
-            # Build string for URI::query_form
-            my $tmp;
-            foreach ( keys %postdata ) {
-                $postdata{$_} =~ s/\$(\w+)/\$datas->{$1}/g;
-                $postdata{$_} = "'$postdata{$_}'"
-                  if ( $postdata{$_} =~ /^\w+$/ );
-                $tmp .= "'$_'=>$postdata{$_},";
-            }
-
-            $class->lmLog( "Compiling POST request for $url (vhost $vhost)",
-                'debug' );
-            $transform->{$vhost}->{ $d->{postUrl} } = sub {
-                return $class->buildPostForm( $d->{postUrl} )
-                  if ( $apacheRequest->method ne 'POST' );
-                $apacheRequest->add_input_filter(
-                    sub {
-                        $class->postFilter( $tmp, @_ );
-                    }
-                );
-                OK;
-              }
         }
-
     }
-
 }
 
 ## @rmethod protected transformUri(string uri)
@@ -331,6 +377,25 @@ sub checkMaintenanceMode {
     }
 
     return 0;
+}
+
+## @method arrayref getAliases(scalar vhost, hashref options)
+# Check aliases of a vhost
+# @param vhost vhost name
+# @param options vhostOptions configuration item
+# @return arrayref of vhost and aliases
+sub getAliases {
+    my ( $class, $vhost, $options ) = splice @_;
+    my $aliases = [$vhost];
+
+    if ( $options->{$vhost}->{vhostAliases} ) {
+        foreach ( split /\s+/, $options->{$vhost}->{vhostAliases} ) {
+            push @$aliases, $_;
+            $class->lmLog( "$_ is an alias for $vhost", 'debug' );
+        }
+    }
+
+    return $aliases;
 }
 
 1;
@@ -394,7 +459,7 @@ L<http://lemonldap-ng.org/>
 
 =item Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
 
-=item François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+=item FranÃ§ois-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
 
 =item Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
@@ -416,7 +481,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =item Copyright (C) 2006, 2007, 2008, 2009, 2010 by Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
-=item Copyright (C) 2012 by François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+=item Copyright (C) 2012 by FranÃ§ois-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
 
 =item Copyright (C) 2006, 2010, 2011, 2012, 2013 by Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
 

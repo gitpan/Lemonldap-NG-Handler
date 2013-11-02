@@ -7,7 +7,7 @@
 
 package My::Package;
 
-use Test::More tests => 4;
+use Test::More tests => 5;
 
 BEGIN {
     use_ok('Lemonldap::NG::Handler::Vhost');
@@ -22,6 +22,28 @@ BEGIN {
 our @ISA = qw( Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple );
 my $h;
 $h = bless {}, 'My::Package';
+
+open STDERR, '>/dev/null';
+
+ok(
+    $h->defaultValuesInit(
+        {
+            https        => 0,
+            port         => 0,
+            maintenance  => 0,
+            vhostOptions => {
+                www1 => {
+                    vhostHttps       => 1,
+                    vhostPort        => 443,
+                    vhostMaintenance => 1,
+                    vhostAliases     => 'www2 www3',
+
+                }
+            },
+        }
+    ),
+    'defaultValuesInit'
+);
 
 ok(
     $h->locationRulesInit(

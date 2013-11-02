@@ -32,7 +32,7 @@ use constant MAINTENANCE_CODE => 503;
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.2.3';
+our $VERSION = '1.3.0';
 
 our %EXPORT_TAGS;
 
@@ -42,19 +42,19 @@ our @EXPORT;
 
 # Shared variables
 our (
-    $locationRegexp,     $locationCondition,   $defaultCondition,
-    $locationProtection, $defaultProtection,   $forgeHeaders,
-    $apacheRequest,      $locationCount,       $cookieName,
-    $datas,              $globalStorage,       $globalStorageOptions,
-    $localStorage,       $localStorageOptions, $whatToTrace,
-    $https,              $refLocalStorage,     $safe,
-    $port,               $statusPipe,          $statusOut,
-    $customFunctions,    $transform,           $cda,
-    $childInitDone,      $httpOnly,            $cookieExpiration,
-    $timeoutActivity,    $datasUpdate,         $useRedirectOnForbidden,
-    $useRedirectOnError, $useSafeJail,         $securedCookie,
-    $key,                $cipher,              $headerList,
-    $maintenance,
+    $locationRegexp,         $locationCondition,     $defaultCondition,
+    $locationProtection,     $locationConditionText, $defaultProtection,
+    $forgeHeaders,           $apacheRequest,         $locationCount,
+    $cookieName,             $datas,                 $globalStorage,
+    $globalStorageOptions,   $localStorage,          $localStorageOptions,
+    $whatToTrace,            $https,                 $refLocalStorage,
+    $safe,                   $port,                  $statusPipe,
+    $statusOut,              $customFunctions,       $transform,
+    $cda,                    $childInitDone,         $httpOnly,
+    $cookieExpiration,       $timeoutActivity,       $datasUpdate,
+    $useRedirectOnForbidden, $useRedirectOnError,    $useSafeJail,
+    $securedCookie,          $key,                   $cipher,
+    $headerList,             $maintenance
 );
 
 ##########################################
@@ -68,8 +68,8 @@ BEGIN {
         globalStorage => [qw( $globalStorage $globalStorageOptions )],
         locationRules => [
             qw(
-              $locationCondition $defaultCondition $locationCount
-              $locationProtection $defaultProtection $datasUpdate
+              $locationCondition $locationConditionText $defaultCondition
+              $locationCount $locationProtection $defaultProtection $datasUpdate
               $locationRegexp $apacheRequest $datas safe $customFunctions
               $useSafeJail
               )
@@ -140,6 +140,7 @@ BEGIN {
             require threads::shared;
             threads::shared::share($locationRegexp);
             threads::shared::share($locationCondition);
+            threads::shared::share($locationConditionText);
             threads::shared::share($defaultCondition);
             threads::shared::share($locationProtection);
             threads::shared::share($defaultProtection);
@@ -249,12 +250,7 @@ sub lmSetApacheUser {
 # @return string
 sub regRemoteIp {
     my ( $class, $str ) = splice @_;
-    if ( MP() == 2 ) {
-        $str =~ s/\$datas->\{ip\}/\$apacheRequest->connection->remote_ip/g;
-    }
-    else {
-        $str =~ s/\$datas->\{ip\}/\$apacheRequest->remote_ip/g;
-    }
+    $str =~ s/\$datas->\{ip\}/ip()/g;
     return $str;
 }
 
@@ -426,9 +422,9 @@ sub safe {
         }
         next if ( $class->can($_) );
         eval "sub $_ {
-            return $sub(\$apacheRequest->uri
-                . ( \$apacheRequest->args ? '?' . \$apacheRequest->args : '' )
-                , \@_)
+            my \$uri = \$apacheRequest->unparsed_uri();
+            Apache2::URI::unescape_url(\$uri);
+            return $sub(\$uri, \@_)
             }";
         $class->lmLog( $@, 'error' ) if ($@);
     }
@@ -444,7 +440,8 @@ sub safe {
     # Share objets with Safe jail
     $safe->share_from( 'Lemonldap::NG::Common::Safelib',
         $Lemonldap::NG::Common::Safelib::functions );
-    $safe->share( '&encode_base64', '$datas', '&portal', '$apacheRequest', @t );
+    $safe->share( '&encode_base64', '&ip', '$datas', '&portal',
+        '$apacheRequest', @t );
 
     return $safe;
 }
@@ -457,7 +454,6 @@ sub localInit($$) {
     my ( $class, $args ) = splice @_;
     if ( $localStorage = $args->{localStorage} ) {
         $localStorageOptions = $args->{localStorageOptions};
-        $localStorageOptions->{namespace}          ||= "lemonldap";
         $localStorageOptions->{default_expires_in} ||= 600;
         $class->purgeCache();
     }
@@ -852,12 +848,8 @@ sub encodeUrl {
 # @return Apache2::Const::REDIRECT
 sub goToPortal {
     my ( $class, $url, $arg ) = splice @_;
-    $class->lmLog(
-        "Redirect "
-          . $apacheRequest->connection->remote_ip
-          . " to portal (url was $url)",
-        'debug'
-    );
+    $class->lmLog( "Redirect " . $class->ip() . " to portal (url was $url)",
+        'debug' );
     my $urlc_init = $class->encodeUrl($url);
     lmSetHeaderOut( $apacheRequest,
             'Location' => $class->portal()
@@ -923,6 +915,17 @@ sub retrieveSession {
     return 1;
 }
 
+sub ip {
+    my $ip = 'unknownIP';
+    eval {
+        $ip =
+          ( MP() == 2 )
+          ? $apacheRequest->connection->remote_ip
+          : $apacheRequest->remote_ip;
+    };
+    return $ip;
+}
+
 # MAIN SUBROUTINE called by Apache (using PerlHeaderParserHandler option)
 
 ## @rmethod int run(Apache2::RequestRec apacheRequest)
@@ -980,15 +983,15 @@ sub run ($$) {
         );
         return REDIRECT;
     }
-    my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
+    my $uri      = $apacheRequest->unparsed_uri();
+    my $uri_orig = $uri;
     Apache2::URI::unescape_url($uri);
 
     my $protection = $class->isUnprotected($uri);
 
     if ( $protection == SKIP ) {
         $class->lmLog( "Access control skipped", "debug" );
-        $class->updateStatus( $apacheRequest->connection->remote_ip,
-            $apacheRequest->uri, 'SKIP' );
+        $class->updateStatus( $class->ip(), $apacheRequest->uri, 'SKIP' );
         $class->hideCookie;
         $class->cleanHeaders;
         return OK;
@@ -1038,8 +1041,7 @@ sub run ($$) {
 
         # Ignore unprotected URIs
         $class->lmLog( "No valid session but unprotected access", "debug" );
-        $class->updateStatus( $apacheRequest->connection->remote_ip,
-            $apacheRequest->uri, 'UNPROTECT' );
+        $class->updateStatus( $class->ip(), $apacheRequest->uri, 'UNPROTECT' );
         $class->hideCookie;
         $class->cleanHeaders;
         return OK;
@@ -1052,9 +1054,9 @@ sub run ($$) {
           unless ($id);
 
         # if the cookie was fetched, a log is sent by retrieveSession()
-        $class->updateStatus( $apacheRequest->connection->remote_ip,
-            $apacheRequest->uri, $id ? 'EXPIRED' : 'REDIRECT' );
-        return $class->goToPortal($uri);
+        $class->updateStatus( $class->ip(), $apacheRequest->uri,
+            $id ? 'EXPIRED' : 'REDIRECT' );
+        return $class->goToPortal($uri_orig);
     }
 }
 
@@ -1264,7 +1266,7 @@ L<http://lemonldap-ng.org/>
 
 =item Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
 
-=item François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+=item FranÃ§ois-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
 
 =item Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
@@ -1288,7 +1290,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =item Copyright (C) 2006, 2007, 2008, 2009, 2010 by Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
-=item Copyright (C) 2012, 2013 by François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+=item Copyright (C) 2012, 2013 by FranÃ§ois-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
 
 =item Copyright (C) 2006, 2009, 2010, 2011, 2012, 2013 by Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
 
@@ -1321,7 +1323,7 @@ sub abort {
     # If abort is called without a valid request, fall to die
     eval {
         my $args = $apacheRequest->args;
-        my $uri = $apacheRequest->uri . ( $args ? "?$args" : "" );
+        my $uri  = $apacheRequest->unparsed_uri();
 
         # Set error 500 in logs even if "useRedirectOnError" is set
         $apacheRequest->push_handlers(
@@ -1386,6 +1388,8 @@ sub locationRulesInit {
                 $locationProtection->[$locationCount]
             ) = $class->conditionSub( $args->{locationRules}->{$_} );
             $locationRegexp->[$locationCount] = qr/$_/;
+            $locationConditionText->[$locationCount] =
+              /^\(\?#(.*?)\)/ ? $1 : /^(.*?)##(.+)$/ ? $2 : $_;
             $locationCount++;
         }
     }
@@ -1505,9 +1509,14 @@ sub isUnprotected {
 sub grant {
     my ( $class, $uri ) = splice @_;
     for ( my $i = 0 ; $i < $locationCount ; $i++ ) {
-        return &{ $locationCondition->[$i] }($datas)
-          if ( $uri =~ $locationRegexp->[$i] );
+        if ( $uri =~ $locationRegexp->[$i] ) {
+            $class->lmLog(
+                'Regexp "' . $locationConditionText->[$i] . '" match',
+                'debug' );
+            return &{ $locationCondition->[$i] }($datas);
+        }
     }
+    $class->lmLog( 'debug', 'Apply default rule' );
     return &$defaultCondition($datas);
 }
 
@@ -1708,8 +1717,7 @@ sub unlog ($$) {
     my $class;
     ( $class, $apacheRequest ) = splice @_;
     $class->localUnlog;
-    $class->updateStatus( $apacheRequest->connection->remote_ip,
-        $apacheRequest->uri, 'LOGOUT' );
+    $class->updateStatus( $class->ip(), $apacheRequest->uri, 'LOGOUT' );
     return $class->goToPortal( '/', 'logout=1' );
 }
 
