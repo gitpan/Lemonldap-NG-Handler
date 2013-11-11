@@ -32,6 +32,6 @@ requires:
   Apache::Session::Generate::MD5: 0
   CGI: 3.08
   LWP: 0
-  Lemonldap::NG::Common: v1.3.0
+  Lemonldap::NG::Common: v1.3.1
   URI: 0
-version: v1.3.0
+version: v1.3.1
