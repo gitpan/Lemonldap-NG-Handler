@@ -5,7 +5,7 @@
 # Alias for Lemonldap::NG::Handler::SharedConf
 package Lemonldap::NG::Handler;
 
-our $VERSION = '1.3.2';
+our $VERSION = '1.3.3';
 use Lemonldap::NG::Handler::SharedConf;
 use base qw(Lemonldap::NG::Handler::SharedConf);
 

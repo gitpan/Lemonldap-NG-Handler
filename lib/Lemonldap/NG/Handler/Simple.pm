@@ -32,7 +32,7 @@ use constant MAINTENANCE_CODE => 503;
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.3.2';
+our $VERSION = '1.3.3';
 
 our %EXPORT_TAGS;
 
