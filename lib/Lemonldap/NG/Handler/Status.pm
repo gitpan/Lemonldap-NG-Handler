@@ -9,7 +9,7 @@ use Data::Dumper;
 
 #inherits Cache::Cache
 
-our $VERSION = '1.2.2';
+our $VERSION = '1.4.0';
 
 our $status   = {};
 our $activity = [];
@@ -95,6 +95,9 @@ sub portalTab {
         75 => 'PORTAL_FORBIDDENIP',
         76 => 'PORTAL_CAPTCHAERROR',
         77 => 'PORTAL_CAPTCHAEMPTY',
+        78 => 'PORTAL_REGISTERFIRSTACCESS',
+        79 => 'PORTAL_REGISTERFORMEMPTY',
+        80 => 'PORTAL_REGISTERALREADYEXISTS',
     };
 }
 

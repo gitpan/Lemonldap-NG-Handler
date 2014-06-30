@@ -1,0 +1,90 @@
+applicationList
+        '$data1 = {&#39;1sample&#39; => { catname => &#39;Sample applications&#39;,type => &#39;category&#39;, &#39;test1&#39; => { type => &#39;application&#39;, options => { name => &#39;Application Test 1&#39;, uri => &#39;http://test1.example.com/&#39;, description => &#39;A simple application displaying authenticated user&#39;, logo => &#39;demo.png&#39;, display => &#39;auto&#39;,  }, },&#39;test2&#39; => { type => &#39;application&#39;, options => { name => &#39;Application Test 2&#39;, uri => &#39;http://test2.example.com/&#39;, description => &#39;The same simple application displaying authenticated user&#39;, logo => &#39;thumbnail.png&#39;, display => &#39;auto&#39;,  }, }, },&#39;2administration&#39; => { catname => &#39;Administration&#39;, type => &#39;category&#39;, &#39;manager&#39; => { type => &#39;application&#39;, options => { name => &#39;WebSSO Manager&#39;, uri => &#39;http://manager.example.com/&#39;, description => &#39;Configure LemonLDAP::NG WebSSO&#39;, logo => &#39;configure.png&#39;, display => &#39;auto&#39;,  }, },&#39;sessions&#39; => { type => &#39;application&#39;, options => { name => &#39;Sessions explorer&#39;, uri => &#39;http://manager.example.com/sessions.pl&#39;, description => &#39;Explore WebSSO sessions&#39;, logo => &#39;database.png&#39;, display => &#39;auto&#39;,  }, }, &#39;notifications&#39; => { type => &#39;application&#39;, options => { name => &#39;Notifications explorer&#39;, uri => &#39;http://manager.example.com/notifications.pl&#39;, description => &#39;Explore WebSSO notifications&#39;, logo => &#39;database.png&#39;, display => &#39;auto&#39;,  }, }, }, &#39;3documentation&#39; => { catname => &#39;Documentation&#39;, type => &#39;category&#39;, &#39;localdoc&#39; => { type => &#39;application&#39;, options => { name => &#39;Local documentation&#39;, uri => &#39;http://manager.example.com/doc/&#39;, description => &#39;Documentation supplied with LemonLDAP::NG&#39;, logo => &#39;help.png&#39;, display => &#39;on&#39;,  }, },&#39;officialwebsite&#39; => { type => &#39;application&#39;, options => { name => &#39;Offical Website&#39;, uri => &#39;http://lemonldap-ng.org/&#39;, description => &#39;Official LemonLDAP::NG Website&#39;, logo => &#39;network.png&#39;, display => &#39;on&#39;,  }, }, }, }'
+
+globalStorage
+        'Apache::Session::File'
+
+persistentStorage
+        'Apache::Session::File'
+
+cookieName
+        'lemonldap'
+
+demoExportedVars
+        '$data1 = {&#39;uid&#39; => &#39;uid&#39;,&#39;cn&#39; => &#39;cn&#39;,&#39;mail&#39; => &#39;mail&#39;};'
+
+exportedVars
+        '$data1 = {&#39;UA&#39; => &#39;HTTP_USER_AGENT&#39;};'
+
+authentication
+        'Demo'
+
+userDB
+        'Demo'
+
+passwordDB
+        'Demo'
+
+locationRules
+        '$data1 = {&#39;test2.example.com&#39; => {&#39;default&#39; => &#39;accept&#39;,&#39;^/logout&#39; => &#39;logout_sso&#39;},&#39;test1.example.com&#39; => {&#39;default&#39; => &#39;accept&#39;,&#39;^/logout&#39; => &#39;logout_sso&#39;},&#39;manager.example.com&#39; => {&#39;default&#39; => &#39;$uid eq "dwho"&#39;}};'
+
+domain
+        'example.com'
+
+timeout
+        72000
+
+groups
+        '$data1 = {};'
+
+portal
+        'http://auth.example.com/'
+
+exportedHeaders
+        '$data1 = {&#39;test2.example.com&#39; => {&#39;Auth-User&#39; => &#39;$uid&#39;},&#39;test1.example.com&#39; => {&#39;Auth-User&#39; => &#39;$uid&#39;}};'
+
+globalStorageOptions
+        '$data1 = {&#39;Directory&#39; => &#39;__SESSIONDIR__&#39;};'
+
+persistentStorageOptions
+        '$data1 = {&#39;Directory&#39; => &#39;__PSESSIONDIR__&#39;};'
+
+cfgNum
+        1
+
+cfgAuthor
+        'The LemonLDAP::NG team'
+
+securedCookie
+        0
+
+macros
+        '$data1 = {&#39;_whatToTrace&#39; => &#39;$_auth eq \&#39;SAML\&#39; ? "$_user\\@$_idpConfKey" : "$_user"&#39;};'
+
+whatToTrace
+        '$_whatToTrace'
+
+loginHistoryEnabled
+        1
+
+sessionDataToRemember
+        '$data1 = {};'
+
+reloadUrls
+        '$data1 = {&#39;reload.example.com&#39; => &#39;http://reload.example.com/reload&#39;};'
+
+notification
+        1
+
+notificationStorage
+        'File'
+
+notificationStorageOptions
+        '$data1 = {&#39;dirName&#39; => &#39;__NOTIFICATIONDIR__&#39;};'
+
+captcha_data
+        '__CAPTCHADIR__'
+
+captcha_output
+        '__CAPTCHAOUTPUTDIR__'
+

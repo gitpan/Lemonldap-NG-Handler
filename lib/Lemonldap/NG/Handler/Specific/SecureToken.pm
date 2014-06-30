@@ -5,13 +5,18 @@
 # Secure Token
 #
 # Create a secure token used to resolve user identity by a protected application
-package Lemonldap::NG::Handler::SecureToken;
+
+# This specific handler is intended to be called directly by Apache
+
+package Lemonldap::NG::Handler::Specific::SecureToken;
 
 use strict;
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Cache::Memcached;
 use Apache::Session::Generate::MD5;
+use Lemonldap::NG::Handler::Main::Headers;
+use Lemonldap::NG::Handler::Main::Logger;
 
 our $VERSION = '1.1.2';
 
@@ -28,6 +33,15 @@ BEGIN {
         require threads::shared;
         threads::share($secureTokenMemcachedConnection);
     };
+}
+
+## @imethod protected void globalInit(hashRef args)
+# Overload globalInit to launch this class defaultValuesInit
+# @param $args reference to the configuration hash
+sub globalInit {
+    my $class = shift;
+    __PACKAGE__->defaultValuesInit(@_);
+    $class->SUPER::globalInit(@_);
 }
 
 ## @imethod protected void defaultValuesInit(hashRef args)
@@ -65,22 +79,26 @@ sub defaultValuesInit {
     foreach (qw/secureTokenMemcachedServers secureTokenUrls/) {
         no strict 'refs';
         unless ( ref ${$_} eq "ARRAY" ) {
-            $class->lmLog( "Transform $_ value into an array reference",
-                'debug' );
+            Lemonldap::NG::Handler::Main::Logger->lmLog(
+                "Transform $_ value into an array reference", 'debug' );
             my @array = split( /\s+/, ${$_} );
             ${$_} = \@array;
         }
     }
 
     # Display found values in debug mode
-    $class->lmLog( "secureTokenMemcachedServers: @$secureTokenMemcachedServers",
-        'debug' );
-    $class->lmLog( "secureTokenExpiration: $secureTokenExpiration", 'debug' );
-    $class->lmLog( "secureTokenAttribute: $secureTokenAttribute",   'debug' );
-    $class->lmLog( "secureTokenUrls: @$secureTokenUrls",            'debug' );
-    $class->lmLog( "secureTokenHeader: $secureTokenHeader",         'debug' );
-    $class->lmLog( "secureTokenAllowOnError: $secureTokenAllowOnError",
-        'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "secureTokenMemcachedServers: @$secureTokenMemcachedServers", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "secureTokenExpiration: $secureTokenExpiration", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "secureTokenAttribute: $secureTokenAttribute", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "secureTokenUrls: @$secureTokenUrls", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "secureTokenHeader: $secureTokenHeader", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "secureTokenAllowOnError: $secureTokenAllowOnError", 'debug' );
 
     # Delete Secure Token parameters
     delete $args->{'secureTokenMemcachedServers'};
@@ -115,8 +133,8 @@ sub run {
     foreach (@$secureTokenUrls) {
         if ( $uri =~ m#$_# ) {
             $checkurl = 1;
-            $class->lmLog( "URL $uri detected as an Secure Token URL (rule $_)",
-                'debug' );
+            Lemonldap::NG::Handler::Main::Logger->lmLog(
+                "URL $uri detected as an Secure Token URL (rule $_)", 'debug' );
             last;
         }
     }
@@ -138,7 +156,8 @@ sub run {
     return $class->_returnError() unless $key;
 
     # Header location
-    $class->lmSetHeaderIn( $r, $secureTokenHeader => $key );
+    Lemonldap::NG::Handler::Main::Headers->lmSetHeaderIn( $r,
+        $secureTokenHeader => $key );
 
     # Remove token
     eval 'use Apache2::Filter' unless ( $INC{"Apache2/Filter.pm"} );
@@ -172,7 +191,8 @@ sub _createMemcachedConnection {
         'debug'   => 0,
     };
 
-    $class->lmLog( "Memcached connection created", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog( "Memcached connection created",
+        'debug' );
 
     return $memd;
 }
@@ -191,11 +211,13 @@ sub _setToken {
         $secureTokenExpiration );
 
     unless ($res) {
-        $class->lmLog( "Unable to store secure token $key", 'error' );
+        Lemonldap::NG::Handler::Main::Logger->lmLog(
+            "Unable to store secure token $key", 'error' );
         return;
     }
 
-    $class->lmLog( "Set $value in token $key", 'info' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog( "Set $value in token $key",
+        'info' );
 
     return $key;
 }
@@ -210,10 +232,12 @@ sub _deleteToken {
     my $res = $secureTokenMemcachedConnection->delete($key);
 
     unless ($res) {
-        $class->lmLog( "Unable to delete secure token $key", 'error' );
+        Lemonldap::NG::Handler::Main::Logger->lmLog(
+            "Unable to delete secure token $key", 'error' );
     }
     else {
-        $class->lmLog( "Token $key deleted", 'info' );
+        Lemonldap::NG::Handler::Main::Logger->lmLog( "Token $key deleted",
+            'info' );
     }
 
     return $res;
@@ -234,7 +258,7 @@ sub _isAlive {
         my $total_c = $stats->{'total'}->{'connection_structures'};
         my $total_i = $stats->{'total'}->{'total_items'};
 
-        $class->lmLog(
+        Lemonldap::NG::Handler::Main::Logger->lmLog(
 "Memcached connection is alive ($total_c connections / $total_i items)",
             'debug'
         );
@@ -242,7 +266,8 @@ sub _isAlive {
         return 1;
     }
 
-    $class->lmLog( "Memcached connection is not alive", 'error' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "Memcached connection is not alive", 'error' );
 
     return 0;
 }
@@ -254,21 +279,25 @@ sub _returnError {
     my ($class) = splice @_;
 
     if ($secureTokenAllowOnError) {
-        $class->lmLog( "Allow request without secure token", 'debug' );
+        Lemonldap::NG::Handler::Main::Logger->lmLog(
+            "Allow request without secure token", 'debug' );
         return OK;
     }
 
     # Redirect or Forbidden?
-    if ($useRedirectOnError) {
-        $class->lmLog( "Use redirect for error", 'debug' );
+    if ( $tsv->{useRedirectOnError} ) {
+        Lemonldap::NG::Handler::Main::Logger->lmLog( "Use redirect for error",
+            'debug' );
         return $class->goToPortal( '/', 'lmError=500' );
     }
 
     else {
-        $class->lmLog( "Return error", 'debug' );
+        Lemonldap::NG::Handler::Main::Logger->lmLog( "Return error", 'debug' );
         return SERVER_ERROR;
     }
 }
+
+__PACKAGE__->init( {} );
 
 1;
 

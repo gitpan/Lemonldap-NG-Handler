@@ -6,12 +6,30 @@
 # change 'tests => 1' to 'tests => last_test_to_print';
 
 use Test::More tests => 1;
+use Cwd 'abs_path';
+use File::Basename;
+use File::Temp;
 
-BEGIN {
-    use_ok('Lemonldap::NG::Handler::CGI');
+my $ini = File::Temp->new();
+my $dir = dirname( abs_path($0) );
 
-    #    sub Lemonldap::NG::Handler::CGI::lmLog { }
-}
+print $ini "[all]
+
+[configuration]
+type=File
+dirName=$dir
+";
+
+$ini->flush();
+
+use Env qw(LLNG_DEFAULTCONFFILE);
+$LLNG_DEFAULTCONFFILE = $ini->filename;
+
+use_ok('Lemonldap::NG::Handler::CGI');
+
+$LLNG_DEFAULTCONFFILE = undef;
+
+#    sub Lemonldap::NG::Handler::CGI::lmLog { }
 
 #########################
 
@@ -35,7 +53,7 @@ ok(
                 confFile => 'undefined.xx',
             },
             https         => 0,
-            portal        => 'http://auth.example.com',
+            portal        => 'http://auth.example.com/',
             globalStorage => 'Apache::Session::File',
         }
     ),

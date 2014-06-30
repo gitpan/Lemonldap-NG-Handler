@@ -15,6 +15,8 @@ WriteMakefile(
         'SOAP::Lite'        => 0,
         'Test::MockObject'  => 0,
         'Test::Pod'         => 0,
+        'File::Basename'    => 0,
+        'Cwd'               => 0,
     },
     META_MERGE => {
         'recommends' => {
@@ -28,8 +30,9 @@ WriteMakefile(
     PREREQ_PM => {
         'Apache::Session::Generate::MD5' => 0,
         'CGI'                            => 3.08,
-        'Lemonldap::NG::Common'          => '1.3.3',
+        'Lemonldap::NG::Common'          => '1.4.0',
         'LWP'                            => 0,
+        'Mouse'                          => 0,
         'URI'                            => 0,
     },    # e.g., Module::Name => 1.1
     (

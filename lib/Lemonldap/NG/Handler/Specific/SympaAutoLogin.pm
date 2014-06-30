@@ -5,17 +5,31 @@
 # Sympa autologin
 #
 # Build Sympa cookie and send it to Sympa
-package Lemonldap::NG::Handler::SympaAutoLogin;
+
+# This specific handler is intended to be called directly by Apache
+
+package Lemonldap::NG::Handler::Specific::SympaAutoLogin;
 
 use strict;
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
 use Digest::MD5;
+use Lemonldap::NG::Handler::Main::Headers;
+use Lemonldap::NG::Handler::Main::Logger;
 
 our $VERSION = '1.1.2';
 
 # Shared variables
 our ( $sympaSecret, $sympaMailKey );
+
+## @imethod protected void globalInit(hashRef args)
+# Overload globalInit to launch this class defaultValuesInit
+# @param $args reference to the configuration hash
+sub globalInit {
+    my $class = shift;
+    __PACKAGE__->defaultValuesInit(@_);
+    $class->SUPER::globalInit(@_);
+}
 
 ## @imethod protected void defaultValuesInit(hashRef args)
 # Overload defaultValuesInit
@@ -39,8 +53,10 @@ sub defaultValuesInit {
     $sympaMailKey = $args->{'sympaMailKey'} || $sympaMailKey || "mail";
 
     # Display found values in debug mode
-    $class->lmLog( "sympaSecret: $sympaSecret",   'debug' );
-    $class->lmLog( "sympaMailKey: $sympaMailKey", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog( "sympaSecret: $sympaSecret",
+        'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog( "sympaMailKey: $sympaMailKey",
+        'debug' );
 
     # Delete Sympa parameters
     delete $args->{'sympaSecret'};
@@ -77,14 +93,17 @@ sub run {
 
     # Get cookie header, removing Sympa cookie if exists (avoid security
     # problems) and set the new value
-    $tmp = lmHeaderIn( $r, 'Cookie' );
+    $tmp = Lemonldap::NG::Handler::Main::Headers->lmHeaderIn( $r, 'Cookie' );
     $tmp =~ s/\bsympauser=[^,;]*[,;]?//;
     $tmp .= $tmp ? ";$str" : $str;
-    $class->lmSetHeaderIn( $r, 'Cookie' => $tmp );
+    Lemonldap::NG::Handler::Main::Headers->lmSetHeaderIn( $r,
+        'Cookie' => $tmp );
 
     # Return SUPER::run() result
     return $ret;
 }
+
+__PACKAGE__->init( {} );
 
 1;
 

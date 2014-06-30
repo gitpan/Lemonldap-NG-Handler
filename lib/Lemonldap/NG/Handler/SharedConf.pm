@@ -15,19 +15,26 @@
 # and each time a new configuration is detected
 package Lemonldap::NG::Handler::SharedConf;
 
-use strict;
+#use strict;
 
-use Lemonldap::NG::Handler::Simple qw(:all);
-use Lemonldap::NG::Handler::Vhost;
+use Lemonldap::NG::Handler::Main qw(:all);
+use Lemonldap::NG::Handler::Initialization::GlobalInit;
+
+#use Lemonldap::NG::Handler::Vhost;
 use Lemonldap::NG::Common::Conf;               #link protected lmConf
 use Lemonldap::NG::Common::Conf::Constants;    #inherits
 use Cache::Cache qw($EXPIRES_NEVER);
+use Lemonldap::NG::Handler::Main::Logger;
 
-use base qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple);
+use Mouse;
+
+extends qw(Lemonldap::NG::Handler::Main);      # Lemonldap::NG::Handler::Vhost
+
+#use base qw(Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Main);
 
 #parameter reloadTime Time in second between 2 configuration check (600)
 
-our $VERSION    = '1.1.1';
+our $VERSION    = '1.4.0';
 our $cfgNum     = 0;
 our $lastReload = 0;
 our $reloadTime;
@@ -46,8 +53,8 @@ BEGIN {
             threads::shared::share($localConfig);
         };
     }
-    *EXPORT_TAGS = *Lemonldap::NG::Handler::Simple::EXPORT_TAGS;
-    *EXPORT_OK   = *Lemonldap::NG::Handler::Simple::EXPORT_OK;
+    *EXPORT_TAGS = *Lemonldap::NG::Handler::Main::EXPORT_TAGS;
+    *EXPORT_OK   = *Lemonldap::NG::Handler::Main::EXPORT_OK;
     push(
         @{ $EXPORT_TAGS{$_} },
         qw($cfgNum $lastReload $reloadTime $lmConf $localConfig)
@@ -78,7 +85,41 @@ sub defaultValuesInit {
 
     # Local configuration overrides global configuration
     my %h = ( %$args, %$localConfig );
-    return $class->SUPER::defaultValuesInit( \%h );
+
+    #return $class->SUPER::defaultValuesInit( \%h );
+
+    my $globalinit = Lemonldap::NG::Handler::Initialization::GlobalInit->new(
+        customFunctions => $tsv->{customFunctions},
+        useSafeJail     => $tsv->{useSafeJail},
+    );
+
+    (
+        @$tsv{
+            qw( cookieName      securedCookie      whatToTrace
+              https           port               customFunctions
+              timeoutActivity useRedirectOnError useRedirectOnForbidden
+              useSafeJail     key                maintenance )
+        },
+        @$ntsv{
+            qw( cda             httpOnly           cookieExpiration
+              cipher
+              )
+        }
+      )
+      = $globalinit->defaultValuesInit(
+        @$tsv{
+            qw( cookieName      securedCookie      whatToTrace
+              https           port               customFunctions
+              timeoutActivity useRedirectOnError useRedirectOnForbidden
+              useSafeJail     key                maintenance )
+        },
+        @$ntsv{
+            qw( cda             httpOnly           cookieExpiration
+              cipher )
+        },
+        \%h
+      );
+
 }
 
 ## @imethod void localInit(hashRef args)
@@ -114,7 +155,7 @@ sub localInit {
 # MAIN
 
 ## @rmethod int run(Apache2::RequestRec r)
-# Check configuration and launch Lemonldap::NG::Handler::Simple::run().
+# Check configuration and launch Lemonldap::NG::Handler::Main::run().
 # Each $reloadTime, the Apache child verify if its configuration is the same
 # as the configuration stored in the local storage.
 # @param $r Apache2::RequestRec object
@@ -141,21 +182,22 @@ sub testConf {
     my ( $class, $local ) = splice @_;
     my $conf = $lmConf->getConf( { local => $local } );
     unless ( ref($conf) ) {
-        $class->lmLog(
+        Lemonldap::NG::Handler::Main::Logger->lmLog(
 "$class: Unable to load configuration: $Lemonldap::NG::Common::Conf::msg",
             'error'
         );
         return $cfgNum ? OK : SERVER_ERROR;
     }
     if ( !$cfgNum or $cfgNum != $conf->{cfgNum} ) {
-        $class->lmLog(
+        Lemonldap::NG::Handler::Main::Logger->lmLog(
 "$class: get configuration $conf->{cfgNum} ($Lemonldap::NG::Common::Conf::msg)",
             'debug'
         );
         $lastReload = time();
         return $class->setConf($conf);
     }
-    $class->lmLog( "$class: configuration is up to date", 'debug' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "$class: configuration is up to date", 'debug' );
     OK;
 }
 
@@ -185,7 +227,8 @@ sub setConf {
 # @return Apache constant (OK or SERVER_ERROR)
 sub refresh($$) {
     my ( $class, $r ) = splice @_;
-    $class->lmLog( "$class: request for configuration reload", 'notice' );
+    Lemonldap::NG::Handler::Main::Logger->lmLog(
+        "$class: request for configuration reload", 'notice' );
     $r->handler("perl-script");
     if ( $class->testConf(0) == OK ) {
         if ( MP() == 2 ) {
@@ -267,7 +310,7 @@ configuration reload, so you don't need to restart Apache at each change :
 
 =head1 DESCRIPTION
 
-This library inherit from L<Lemonldap::NG::Handler::Simple> to build a
+This library inherit from L<Lemonldap::NG::Handler::Main> to build a
 complete SSO Handler System: a central database contains the policy of your
 domain. People that want to access to a protected applications are redirected
 to the portal that run L<Lemonldap::NG::Portal::SharedConf>. After reading
@@ -282,7 +325,7 @@ the database.
 
 =head3 init
 
-Like L<Lemonldap::NG::Handler::Simple>::init() but read only localStorage
+Like L<Lemonldap::NG::Handler::Main>::init() but read only localStorage
 related options. You may change default time between two configuration checks
 with the C<reloadTime> parameter (default 600s).
 
@@ -310,7 +353,7 @@ L<http://lemonldap-ng.org/>
 
 =item Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
 
-=item FranÃ§ois-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+=item François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
 
 =item Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
@@ -332,7 +375,7 @@ L<http://forge.objectweb.org/project/showfiles.php?group_id=274>
 
 =item Copyright (C) 2006, 2007, 2008, 2009, 2010, 2013 by Xavier Guimard, E<lt>x.guimard@free.frE<gt>
 
-=item Copyright (C) 2012 by FranÃ§ois-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
+=item Copyright (C) 2012 by François-Xavier Deltombe, E<lt>fxdeltombe@gmail.com.E<gt>
 
 =item Copyright (C) 2006, 2008, 2009, 2010, 2011, 2012 by Clement Oudot, E<lt>clem.oudot@gmail.comE<gt>
 

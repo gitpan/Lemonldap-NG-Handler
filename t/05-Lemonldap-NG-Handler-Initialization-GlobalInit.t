@@ -10,8 +10,7 @@ package My::Package;
 use Test::More tests => 5;
 
 BEGIN {
-    use_ok('Lemonldap::NG::Handler::Vhost');
-    use_ok('Lemonldap::NG::Handler::Simple');
+    use_ok('Lemonldap::NG::Handler::Initialization::GlobalInit');
 }
 
 #########################
@@ -19,14 +18,21 @@ BEGIN {
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
 
-our @ISA = qw( Lemonldap::NG::Handler::Vhost Lemonldap::NG::Handler::Simple );
-my $h;
-$h = bless {}, 'My::Package';
+my $globalinit;
 
 open STDERR, '>/dev/null';
 
 ok(
-    $h->defaultValuesInit(
+    $globalinit = Lemonldap::NG::Handler::Initialization::GlobalInit->new(
+        customFunctions => "",
+        useSafeJail     => 1,
+    ),
+    'constructor'
+);
+
+ok(
+    $globalinit->defaultValuesInit(
+        ( map { undef } 1 .. 16 ),
         {
             https        => 0,
             port         => 0,
@@ -46,22 +52,24 @@ ok(
 );
 
 ok(
-    $h->locationRulesInit(
+    $globalinit->locationRulesInit(
+        ( map { undef } 1 .. 8 ),
         {
-            locationRules => {
-                www1 => {
-                    default => 'accept',
-                    '^/no'  => 'deny',
-                    'test'  => '$groups =~ /\badmin\b/',
-                },
-            },
+            'locationRules' => {
+                'www1' => {
+                    'default' => 'accept',
+                    '^/no'    => 'deny',
+                    'test'    => '$groups =~ /\badmin\b/',
+                }
+            }
         }
     ),
     'locationRulesInit'
 );
 
 ok(
-    $h->forgeHeadersInit(
+    $globalinit->forgeHeadersInit(
+        ( map { undef } 1 .. 1 ),
         { exportedHeaders => { www1 => { Auth => '$uid', } } }
     ),
     'forgeHeadersInit'

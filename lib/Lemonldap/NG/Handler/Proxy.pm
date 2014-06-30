@@ -7,8 +7,10 @@ package Lemonldap::NG::Handler::Proxy;
 
 use strict;
 
-use Lemonldap::NG::Handler::Simple qw(:apache :headers :traces);
+use Lemonldap::NG::Handler::Main qw(:apache :headers :tsv);
 use LWP::UserAgent;
+use Lemonldap::NG::Handler::Main::Headers;
+use Lemonldap::NG::Handler::Main::Logger;
 
 our $VERSION = '1.2.0';
 
@@ -35,7 +37,7 @@ sub handler_mp2 : method {
     shift->run(@_);
 }
 
-*lmLog = *Lemonldap::NG::Handler::Simple::lmLog;
+*lmLog = *Lemonldap::NG::Handler::Main::lmLog;
 
 ########
 # MAIN #
@@ -75,7 +77,7 @@ sub run($$) {
         sub {
             return 1 if ( $_[1] =~ /^$/ );
             $request->header(@_) unless ( $_[0] =~ /^(Host|Referer)$/i );
-            $class->lmLog(
+            Lemonldap::NG::Handler::Main::Logger->lmLog(
                 "$class: header pushed to the server: " . $_[0] . ": " . $_[1],
                 'debug'
             );
@@ -148,9 +150,9 @@ sub headers {
                 and $cookieDomain_new
                 and $_[0] =~ /Set-Cookie/i );
 
-            lmSetErrHeaderOut( $r, @_ );
+            Lemonldap::NG::Handler::Main::Headers->lmSetErrHeaderOut( $r, @_ );
 
-            $class->lmLog(
+            Lemonldap::NG::Handler::Main::Logger->lmLog(
                 "$class: header pushed to the client: " . $_[0] . ": " . $_[1],
                 'debug'
             );

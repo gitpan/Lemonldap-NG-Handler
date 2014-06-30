@@ -8,6 +8,7 @@ package Lemonldap::NG::Handler::CGI;
 use strict;
 
 use Lemonldap::NG::Common::CGI;
+use Lemonldap::NG::Common::Session;
 use CGI::Cookie;
 use MIME::Base64;
 
@@ -27,9 +28,10 @@ sub new {
     my $class = shift;
     my $self = $class->SUPER::new() or $class->abort("Unable to build CGI");
     $Lemonldap::NG::Handler::_CGI::_cgi = $self;
-    unless ($Lemonldap::NG::Handler::_CGI::cookieName) {
+    unless ( $Lemonldap::NG::Handler::_CGI::tsv->{cookieName} ) {
         Lemonldap::NG::Handler::_CGI->init(@_);
-        Lemonldap::NG::Handler::_CGI->initLocalStorage(@_);
+
+#Lemonldap::NG::Handler::_CGI->initLocalStorage(@_); # already called by _CGI->init()
     }
     unless ( eval { Lemonldap::NG::Handler::_CGI->testConf() } == OK ) {
         if ( $_[0]->{noAbort} ) {
@@ -65,8 +67,9 @@ sub new {
             $rule =~ s/\$(\w+)/\$datas->{$1}/g;
             $rule = 0 if ( $rule eq 'deny' );
             my $r;
+
             unless ( $rule eq 'accept'
-                or Lemonldap::NG::Handler::_CGI->safe->reval($rule) )
+                or Lemonldap::NG::Handler::_CGI->safe_reval($rule) )
             {
                 $self->abort( 'Forbidden',
                     "You don't have rights to access this page" );
@@ -95,26 +98,37 @@ sub authenticate {
       if ( $self->{_noConf} );
     my %cookies = fetch CGI::Cookie;
     my $id;
-    unless ( $cookies{$cookieName} and $id = $cookies{$cookieName}->value ) {
+    unless ($cookies{ $tsv->{cookieName} }
+        and $id = $cookies{ $tsv->{cookieName} }->value )
+    {
         return $self->goToPortal();
     }
     unless ( $datas and $id eq $datas->{_session_id} ) {
-        unless ( $refLocalStorage and $datas = $refLocalStorage->get($id) ) {
-            my %h;
-            eval { tie %h, $globalStorage, $id, $globalStorageOptions; };
-            if ($@) {
-                return $self->goToPortal();
+
+        my $apacheSession = Lemonldap::NG::Common::Session->new(
+            {
+                storageModule        => $tsv->{globalStorage},
+                storageModuleOptions => $tsv->{globalStorageOptions},
+                cacheModule          => $tsv->{localSessionStorage},
+                cacheModuleOptions   => $tsv->{localSessionStorageOptions},
+                id                   => $id,
+                kind                 => "SSO",
             }
-            $datas->{$_} = $h{$_} foreach ( keys %h );
-            if ($refLocalStorage) {
-                $refLocalStorage->set( $id, $datas, "10 minutes" );
-            }
+        );
+
+        unless ( $apacheSession->data ) {
+            Lemonldap::NG::Handler::Main::Logger->lmLog(
+                "Session $id can't be retrieved", 'info' );
+            return $self->goToPortal();
         }
+
+        $datas->{$_} = $apacheSession->data->{$_}
+          foreach ( keys %{ $apacheSession->data } );
     }
 
     # Accounting : set user in apache logs
-    $self->setApacheUser( $datas->{$whatToTrace} );
-    $ENV{REMOTE_USER} = $datas->{$whatToTrace};
+    $self->setApacheUser( $datas->{ $tsv->{whatToTrace} } );
+    $ENV{REMOTE_USER} = $datas->{ $tsv->{whatToTrace} };
 
     return 1;
 }
@@ -176,11 +190,14 @@ sub goToPortal {
 sub _uri {
     my $vhost = $ENV{SERVER_NAME};
     my $portString =
-         $port->{$vhost}
-      || $port->{_}
+         $tsv->{port}->{$vhost}
+      || $tsv->{port}->{_}
       || $ENV{SERVER_PORT};
-    my $_https =
-      ( defined( $https->{$vhost} ) ? $https->{$vhost} : $https->{_} );
+    my $_https = (
+        defined( $tsv->{https}->{$vhost} )
+        ? $tsv->{https}->{$vhost}
+        : $tsv->{https}->{_}
+    );
     $portString =
         ( $_https  && $portString == 443 ) ? ''
       : ( !$_https && $portString == 80 )  ? ''
@@ -198,11 +215,28 @@ sub _uri {
 package Lemonldap::NG::Handler::_CGI;
 
 use strict;
-use Lemonldap::NG::Handler::SharedConf qw(:locationRules :localStorage :traces);
+
+#use Lemonldap::NG::Handler::SharedConf qw(:locationRules :localStorage :traces);
+use Lemonldap::NG::Handler::SharedConf qw(:tsv :ntsv :jailSharedVars);
+use Lemonldap::NG::Handler::Main::Jail;
 
 use base qw(Lemonldap::NG::Handler::SharedConf);
 
 our $_cgi;
+
+sub safe_reval {
+    my $class = shift;
+    my $rule  = shift;
+
+    my $jail = Lemonldap::NG::Handler::Main::Jail->new(
+        'safe'            => $ntsv->{safe},
+        'useSafeJail'     => $tsv->{useSafeJail},
+        'customFunctions' => $tsv->{customFunctions}
+    );
+    $ntsv->{safe} = $jail->build_safe();
+
+    return $ntsv->{safe}->reval($rule);
+}
 
 ## @method boolean childInit()
 # Since this is not a real Apache handler, childs have not to be initialized.
@@ -229,7 +263,7 @@ sub lmLog {
 # @return boolean : true if $vhost is available
 sub vhostAvailable {
     my ( $self, $vhost ) = splice @_;
-    return defined( $defaultCondition->{$vhost} );
+    return defined( $tsv->{defaultCondition}->{$vhost} );
 }
 
 ## @method boolean grant(string uri, string vhost)
@@ -246,19 +280,19 @@ sub grant {
             args     => '',
         }
     );
-    for ( my $i = 0 ; $i < $locationCount->{$vhost} ; $i++ ) {
-        if ( $uri =~ $locationRegexp->{$vhost}->[$i] ) {
-            return &{ $locationCondition->{$vhost}->[$i] }($datas);
+    for ( my $i = 0 ; $i < $tsv->{locationCount}->{$vhost} ; $i++ ) {
+        if ( $uri =~ $tsv->{locationRegexp}->{$vhost}->[$i] ) {
+            return &{ $tsv->{locationCondition}->{$vhost}->[$i] }($datas);
         }
     }
-    unless ( $defaultCondition->{$vhost} ) {
+    unless ( $tsv->{defaultCondition}->{$vhost} ) {
         $self->lmLog(
             "User rejected because VirtualHost \"$vhost\" has no configuration",
             'warn'
         );
         return 0;
     }
-    return &{ $defaultCondition->{$vhost} }($datas);
+    return &{ $tsv->{defaultCondition}->{$vhost} }($datas);
 }
 
 package Lemonldap::NG::Apache::Request;

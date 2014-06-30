@@ -1,13 +1,16 @@
 ## @file
-# Alias for Lemonldap::NG::Handler::SharedConf
+# Handler module
 
 ## @class
-# Alias for Lemonldap::NG::Handler::SharedConf
+# Handler module
 package Lemonldap::NG::Handler;
 
-our $VERSION = '1.3.3';
+our $VERSION = '1.4.0';
+
 use Lemonldap::NG::Handler::SharedConf;
-use base qw(Lemonldap::NG::Handler::SharedConf);
+@ISA = qw(Lemonldap::NG::Handler::SharedConf);
+
+__PACKAGE__->init();
 
 1;
 
@@ -24,40 +27,17 @@ Lemonldap::NG Web-SSO system.
 
 =head1 SYNOPSIS
 
-=head2 Create your Apache module
-
-Create your own package (example using a central configuration database):
-
-  package My::Package;
-  use Lemonldap::NG::Handler::SharedConf;
-  @ISA = qw(Lemonldap::NG::Handler::SharedConf);
-  
-  __PACKAGE__->init ( {
-    # Local storage used for sessions and configuration
-    localStorage        => "Cache::DBFile",
-    localStorageOptions => {...},
-    # How to get my configuration
-    configStorage       => {
-        type                => "DBI",
-        dbiChain            => "DBI:mysql:database=lemondb;host=$hostname",
-        dbiUser             => "lemonldap",
-        dbiPassword         => "password",
-    }
-    # Uncomment this to activate status module
-    # status                => 1,
-  } );
-
 =head2 Configure Apache
 
-Call your package in /apache-dir/conf/httpd.conf:
+Call Handler in /apache-dir/conf/httpd.conf:
 
   # Load your package
   PerlRequire /My/File
   # TOTAL PROTECTION
-  PerlHeaderParserHandler My::Package
+  PerlHeaderParserHandler Lemonldap::NG::Handler::DefaultHandler
   # OR SELECTED AREA
   <Location /protected-area>
-    PerlHeaderParserHandler My::Package
+    PerlHeaderParserHandler Lemonldap::NG::Handler::DefaultHandler
   </Location>
 
 The configuration is loaded only at Apache start. Create an URI to force
@@ -68,35 +48,16 @@ configuration reload, so you don't need to restart Apache at each change:
     Order deny,allow
     Deny from all
     Allow from my.manager.com
-    PerlHeaderParserHandler My::Package->refresh
+    PerlHeaderParserHandler Lemonldap::NG::Handler::DefaultHandler->refresh
   </Location>
   
-You can also disable access control for specific URIs, but be aware that
-this is not really secure, since session cookies are sent to the protected
-application (so they could be spoofed), and since a user could forge his
-own HTTP request headers and they would not be reset. To disable access
-control for specific URIs on a secure way, you should set access rule to
-'skip' instead.
-
-  <Files "*.gif">
-    PerlHeaderParserHandler My::Package->unprotect
-  </Files>
-
 To display the status page, add something like this :
 
   <Location /status>
     Order deny,allow
     Allow from 10.1.1.0/24
     Deny from all
-    PerlHeaderParserHandler My::Package->status
-  </Location>
-
-If your application has a "logout" URL, you can configure it directly in Apache
-configuration file (or in the manager interface). THIS IS DEPRECATED, use the
-manager :
-
-  <Location /logout>
-    PerlHeaderParserHandler My::Package->logout
+    PerlHeaderParserHandler Lemonldap::NG::Handler::DefaultHandler->status
   </Location>
 
 =head1 DESCRIPTION
@@ -284,8 +245,8 @@ Lemonldap::NG use 3 levels of cache for authenticated users:
 parameter (completed with C<globalStorageOptions>) and used by
 L<lemonldap::NG::Portal> to store authenticated user parameters,
 
-=item * a L<Cache::Cache> module choosed with the C<localStorage> parameter
-(completed with C<localStorageOptions>) and used to share authenticated users
+=item * a L<Cache::Cache> module choosed with the C<localSessionStorage> parameter
+(completed with C<localSessionStorageOptions>) and used to share authenticated users
 between Apache's threads or processus and of course between virtual hosts,
 
 =item * Lemonldap::NG::Handler variables: if the same user use the same thread
@@ -329,15 +290,6 @@ Lemonldap::NG::Handler provides different modules:
 
 =over
 
-=item * L<Lemonldap::NG::Handler::Simple>: base module. It can be used
-directly to protect a single host.
-
-=item * L<Lemonldap::NG::Handler::Vhost>: module used to managed virtual hosts.
-
-=item * L<Lemonldap::NG::Handler::SharedConf>: with this module, the
-configuration can be centralized. Inherits from
-L<Lemonldap::NG::Handler::Vhost> and L<Lemonldap::NG::Handler::Simple>.
-
 =item * L<Lemonldap::NG::Handler::CGI>: if you have only a few Perl CGI to
 protect, you can use this module in your CGI instead of protecting it under
 L<Lemonldap::NG::Handler::SharedConf>.
@@ -356,7 +308,7 @@ download a mod_perl2 backport.
 
 =head1 SEE ALSO
 
-L<Lemonldap::NG::Handler::SharedConf>,
+L<Lemonldap::NG::Handler::DefaultHandler>,
 L<Lemonldap::NG::Portal>, L<Lemonldap::NG::Manager>,
 L<http://lemonldap-ng.org/>
 

@@ -3,13 +3,19 @@
 
 ## @class
 # Lemonldap::NG special handler
-package Lemonldap::NG::Handler::UpdateCookie;
+
+# This specific handler is intended to be called directly by Apache
+
+package Lemonldap::NG::Handler::Specific::UpdateCookie;
 
 use strict;
 use Lemonldap::NG::Handler::SharedConf qw(:all);
 use base qw(Lemonldap::NG::Handler::SharedConf);
+use Lemonldap::NG::Handler::Main::Headers;
+use Lemonldap::NG::Handler::Main::Logger;
+use Lemonldap::NG::Common::Session;
 
-our $VERSION = '1.0.0';
+our $VERSION = '1.4.0';
 
 ## @rmethod int run(Apache2::RequestRec apacheRequest)
 # Main method used to control access.
@@ -33,20 +39,40 @@ sub run {
         my $utime;
         if ( $utime = $class->fetchUTime ) {
             my $clear = 0;
+
+            my $apacheSession = Lemonldap::NG::Common::Session->new(
+                {
+                    storageModule        => $tsv->{globalStorage},
+                    storageModuleOptions => $tsv->{globalStorageOptions},
+                    cacheModule          => $tsv->{localSessionStorage},
+                    cacheModuleOptions   => $tsv->{localSessionStorageOptions},
+                    id                   => $id,
+                    kind                 => "SSO",
+                }
+            );
+
+            # Check process data
             if ( $id eq $datas->{_session_id} and $datas->{_utime} lt $utime ) {
                 $datas->{_session_id} = 0;
                 $clear = 1;
             }
-            elsif ( $refLocalStorage
-                and my $ldatas = $refLocalStorage->get($id) )
-            {
-                if ( $ldatas->{_utime} lt $utime ) {
-                    $clear = 1;
+
+            # Get session
+            else {
+                unless ( $apacheSession->data ) {
+                    Lemonldap::NG::Handler::Main::Logger->lmLog(
+                        "Session $id can't be retrieved", 'info' );
+                }
+                else {
+                    $clear = 1 if ( $apacheSession->data->{_utime} lt $utime );
                 }
             }
+
+            # Clear cache if needed
             if ($clear) {
-                $class->lmLog( "$class: remove $id from local cache", 'debug' );
-                $refLocalStorage->remove($id);
+                Lemonldap::NG::Handler::Main::Logger->lmLog(
+                    "$class: remove $id from local cache", 'debug' );
+                $apacheSession->cacheUpdate();
             }
         }
 
@@ -60,10 +86,13 @@ sub run {
 # Get user cookies and search for Lemonldap::NG update cookie.
 # @return Value of the cookie if found, 0 else
 sub fetchUTime {
-    my $t = lmHeaderIn( $apacheRequest, 'Cookie' );
-    my $c = $cookieName . 'update';
+    my $t = Lemonldap::NG::Handler::Main::Headers->lmHeaderIn( $apacheRequest,
+        'Cookie' );
+    my $c = $tsv->{cookieName} . 'update';
     return ( $t =~ /$c=([^,; ]+)/o ) ? $1 : 0;
 }
+
+__PACKAGE__->init( {} );
 
 1;
 __END__
