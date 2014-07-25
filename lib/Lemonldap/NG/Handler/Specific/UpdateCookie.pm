@@ -15,7 +15,7 @@ use Lemonldap::NG::Handler::Main::Headers;
 use Lemonldap::NG::Handler::Main::Logger;
 use Lemonldap::NG::Common::Session;
 
-our $VERSION = '1.4.0';
+our $VERSION = '1.4.1';
 
 ## @rmethod int run(Apache2::RequestRec apacheRequest)
 # Main method used to control access.
@@ -59,9 +59,11 @@ sub run {
 
             # Get session
             else {
-                unless ( $apacheSession->data ) {
+                if ( $apacheSession->error ) {
                     Lemonldap::NG::Handler::Main::Logger->lmLog(
                         "Session $id can't be retrieved", 'info' );
+                    Lemonldap::NG::Handler::Main::Logger->lmLog(
+                        $apacheSession->error, 'info' );
                 }
                 else {
                     $clear = 1 if ( $apacheSession->data->{_utime} lt $utime );

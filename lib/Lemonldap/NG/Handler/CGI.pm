@@ -18,7 +18,7 @@ use Lemonldap::NG::Handler::SharedConf qw(:all);
 
 #link Lemonldap::NG::Handler::_CGI protected _handler
 
-our $VERSION = '1.2.3';
+our $VERSION = '1.4.1';
 
 ## @cmethod Lemonldap::NG::Handler::CGI new(hashRef args)
 # Constructor.
@@ -116,9 +116,11 @@ sub authenticate {
             }
         );
 
-        unless ( $apacheSession->data ) {
+        if ( $apacheSession->error ) {
             Lemonldap::NG::Handler::Main::Logger->lmLog(
                 "Session $id can't be retrieved", 'info' );
+            Lemonldap::NG::Handler::Main::Logger->lmLog( $apacheSession->error,
+                'info' );
             return $self->goToPortal();
         }
 

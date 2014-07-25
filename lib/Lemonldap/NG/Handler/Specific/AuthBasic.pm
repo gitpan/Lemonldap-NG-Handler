@@ -23,7 +23,7 @@ use base qw(Lemonldap::NG::Handler::SharedConf);
 use utf8;
 no utf8;
 
-our $VERSION = '1.4.0';
+our $VERSION = '1.4.1';
 
 # We need just this constant, that's why Portal is 'required' but not 'used'
 *PE_OK = *Lemonldap::NG::Portal::SharedConf::PE_OK;
@@ -144,9 +144,11 @@ sub run ($$) {
             }
         );
 
-        unless ( $apacheSession->data ) {
+        if ( $apacheSession->error ) {
             Lemonldap::NG::Handler::Main::Logger->lmLog(
                 "The cookie $session_id isn't yet available", 'info' );
+            Lemonldap::NG::Handler::Main::Logger->lmLog( $apacheSession->error,
+                'info' );
             $class->updateStatus( $class->ip(), $apacheRequest->uri,
                 'EXPIRED' );
             return $class->goToPortal($uri);

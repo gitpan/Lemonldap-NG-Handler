@@ -9,7 +9,7 @@ use Data::Dumper;
 
 #inherits Cache::Cache
 
-our $VERSION = '1.4.0';
+our $VERSION = '1.4.1';
 
 our $status   = {};
 our $activity = [];
@@ -214,11 +214,11 @@ sub run {
                 print "<div id=\"users\"><p>\nTotal users : $u\n</p></div>\n";
 
                 # Local cache
-                my @t =
-                  $refLocalStorage->get_keys(
-                    $localStorageOptions->{namespace} );
-                print "<div id=\"cache\"><p>\nLocal Cache : " . @t
-                  . " objects\n</p></div>\n";
+                #my @t =
+                #  $refLocalStorage->get_keys(
+                #    $localStorageOptions->{namespace} );
+                #print "<div id=\"cache\"><p>\nLocal Cache : " . @t
+                #  . " objects\n</p></div>\n";
 
                 # Uptime
                 print "<div id=\"up\"><p>\nServer up for : "

@@ -31,7 +31,7 @@ use constant MAINTENANCE_CODE => 503;
 #inherits Apache::Session
 #link Lemonldap::NG::Common::Apache::Session::SOAP protected globalStorage
 
-our $VERSION = '1.4.0';
+our $VERSION = '1.4.1';
 
 our %EXPORT_TAGS;
 
@@ -199,11 +199,12 @@ sub lmSetApacheUser {
 # Inform the status process of the result of the request if it is available.
 sub updateStatus {
     my ( $class, $user, $url, $action ) = splice @_;
+    my $statusPipe = $tsv->{statusPipe};
     eval {
-            print { $tsv->{statusPipe} } "$user => "
+            print $statusPipe "$user => "
           . $apacheRequest->hostname
           . "$url $action\n"
-          if ( $tsv->{statusPipe} );
+          if ($statusPipe);
     };
 }
 
@@ -366,11 +367,21 @@ sub retrieveSession {
         }
     );
 
-    if ( $datas = $apacheSession->data ) {
+    unless ( $apacheSession->error ) {
+
+        $datas = $apacheSession->data;
 
         # Update the session to notify activity, if necessary
-        $apacheSession->update( { '_lastSeen' => time } )
-          if ( $tsv->{timeoutActivity} );
+        if ( $tsv->{timeoutActivity} ) {
+            $apacheSession->update( { '_lastSeen' => time } );
+
+            if ( $apacheSession->error ) {
+                Lemonldap::NG::Handler::Main::Logger->lmLog(
+                    "Cannot update session $id", 'error' );
+                Lemonldap::NG::Handler::Main::Logger->lmLog(
+                    $apacheSession->error, 'error' );
+            }
+        }
 
         $datasUpdate = time();
         return 1;
@@ -378,6 +389,9 @@ sub retrieveSession {
     else {
         Lemonldap::NG::Handler::Main::Logger->lmLog(
             "Session $id can't be retrieved", 'info' );
+        Lemonldap::NG::Handler::Main::Logger->lmLog( $apacheSession->error,
+            'info' );
+
         return 0;
     }
 }
@@ -819,16 +833,18 @@ sub unlog ($$) {
 # @return Apache2::Const::OK
 sub status($$) {
     my ( $class, $r ) = splice @_;
+
+    my $statusOut  = $tsv->{statusOut};
+    my $statusPipe = $tsv->{statusPipe};
+
     Lemonldap::NG::Handler::Main::Logger->lmLog( "$class: request for status",
         'debug' );
     return $class->abort("$class: status page can not be displayed")
-      unless ( $tsv->{statusPipe} and $tsv->{statusOut} );
+      unless ( $statusPipe and $statusOut );
     $r->handler("perl-script");
-    print { $tsv->{statusPipe} } "STATUS"
-      . ( $r->args ? " " . $r->args : '' ) . "\n";
+    print $statusPipe "STATUS" . ( $r->args ? " " . $r->args : '' ) . "\n";
     my $buf;
-    my $statusOut = $tsv->{statusOut};
-    while ($statusOut) {
+    while (<$statusOut>) {
         last if (/^END$/);
         $buf .= $_;
     }

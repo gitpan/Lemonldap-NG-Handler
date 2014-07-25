@@ -64,7 +64,17 @@ sub lmUnsetHeaderIn {
     my ( $self, $r, @headers ) = splice @_;
     foreach my $h (@headers) {
         if ( MP() == 2 ) {
-            $r->headers_in->unset($h);
+            $h = lc $h;
+            $h =~ s/-/_/g;
+            $r->headers_in->do(
+                sub {
+                    my $h1 = shift;
+                    my $h2 = lc $h1;
+                    $h2 =~ s/-/_/g;
+                    $r->headers_in->unset($h1) if ( $h eq $h2 );
+                    return 1;
+                }
+            );
         }
         elsif ( MP() == 1 ) {
             $r->header_in( $h => "" )
