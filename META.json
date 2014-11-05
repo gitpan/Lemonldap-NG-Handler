@@ -49,12 +49,12 @@
             "Apache::Session::Generate::MD5" : "0",
             "CGI" : "3.08",
             "LWP" : "0",
-            "Lemonldap::NG::Common" : "v1.4.1",
+            "Lemonldap::NG::Common" : "v1.4.2",
             "Mouse" : "0",
             "URI" : "0"
          }
       }
    },
    "release_status" : "stable",
-   "version" : "v1.4.1"
+   "version" : "v1.4.2"
 }
