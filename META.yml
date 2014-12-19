@@ -1,40 +1,40 @@
 ---
-abstract: 'The Apache protection module part of'
+abstract: 'The Apache protection module part of Lemonldap::NG Web-SSO system.'
 author:
   - 'Xavier Guimard <x.guimard@free.fr>'
 build_requires:
-  Cwd: 0
-  Digest::HMAC_SHA1: 0
-  File::Basename: 0
-  HTTP::Message: 0
-  IO::Pipe: 0
-  SOAP::Lite: 0
-  Test::MockObject: 0
-  Test::Pod: 0
+  Cwd: '0'
+  Digest::HMAC_SHA1: '0'
+  File::Basename: '0'
+  HTTP::Message: '0'
+  IO::Pipe: '0'
+  SOAP::Lite: '0'
+  Test::MockObject: '0'
+  Test::Pod: '0'
 configure_requires:
-  ExtUtils::MakeMaker: 0
+  ExtUtils::MakeMaker: '0'
 dynamic_config: 1
-generated_by: 'ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.120921'
+generated_by: 'ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.142060'
 license: open_source
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+  version: '1.4'
 name: Lemonldap-NG-Handler
 no_index:
   directory:
     - t
     - inc
 recommends:
-  Cache::Memcached: 0
-  Digest::HMAC_SHA1: 0
-  HTTP::Message: 0
-  LWP::Protocol::https: 0
-  SOAP::Lite: 0
+  Cache::Memcached: '0'
+  Digest::HMAC_SHA1: '0'
+  HTTP::Message: '0'
+  LWP::Protocol::https: '0'
+  SOAP::Lite: '0'
 requires:
-  Apache::Session::Generate::MD5: 0
-  CGI: 3.08
-  LWP: 0
-  Lemonldap::NG::Common: v1.4.2
-  Mouse: 0
-  URI: 0
-version: v1.4.2
+  Apache::Session::Generate::MD5: '0'
+  CGI: '3.08'
+  LWP: '0'
+  Lemonldap::NG::Common: v1.4.3
+  Mouse: '0'
+  URI: '0'
+version: v1.4.3
